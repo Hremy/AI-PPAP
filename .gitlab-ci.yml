@@ -1,0 +1,25 @@
+stages: [build]
+
+variables:
+  MAVEN_CLI_OPTS: "-B -DskipTests"
+  NODE_VERSION: "20"
+
+backend-build:
+  image: maven:3.9-eclipse-temurin-21
+  stage: build
+  script:
+    - mvn $MAVEN_CLI_OPTS -f backend/pom.xml clean package
+  artifacts:
+    paths:
+      - backend/target/*.jar
+
+frontend-build:
+  image: node:${NODE_VERSION}-alpine
+  stage: build
+  before_script:
+    - npm ci --prefix frontend || npm install --prefix frontend
+  script:
+    - npm run build --prefix frontend
+  artifacts:
+    paths:
+      - frontend/dist

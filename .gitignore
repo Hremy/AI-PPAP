@@ -1,0 +1,16 @@
+.DS_Store
+**/target/
+**/.idea/
+**/*.iml
+**/.project
+**/.classpath
+.mvn/wrapper/
+**/node_modules/
+**/dist/
+**/.vite/
+.env
+*.env
+*.env.*
+!.env.example
+**/logs/
+*.log
