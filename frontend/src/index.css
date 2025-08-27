@@ -2,4 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-primary: #8FCBFA;
+  --color-secondary: #002035;
+  --color-background: #F0F4F7;
+  --color-error: #F00F40;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-secondary);
+}
+
 html, body, #root { height: 100%; }

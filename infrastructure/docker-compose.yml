@@ -1,20 +1,37 @@
-version: '3.9'
+
 services:
   db:
     image: postgres:16-alpine
-    container_name: ai_pat_db
+    container_name: ai_ppap_db
     environment:
-      POSTGRES_DB: ai_pat
-      POSTGRES_USER: ai_pat
-      POSTGRES_PASSWORD: ai_pat
+      POSTGRES_DB: ai_ppap
+      POSTGRES_USER: ai_ppap
+      POSTGRES_PASSWORD: ai_ppap
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ai_pat -d ai_pat"]
+      test: ["CMD-SHELL", "pg_isready -U ai_ppap -d ai_ppap"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ai_ppap_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@ai-ppap.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_LISTEN_PORT: 80
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   db_data:
+  pgadmin_data:

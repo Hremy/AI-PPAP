@@ -1,5 +1,107 @@
-import axios from 'axios'
-const fromEnv = import.meta.env.VITE_API_BASE_URL
-const fallback = `${window.location.protocol}//${window.location.hostname}:8082`
-const API_BASE = fromEnv && fromEnv.trim() !== '' ? fromEnv : fallback
-export const api = axios.create({ baseURL: API_BASE, headers: { 'Content-Type': 'application/json' } })
+import axios from 'axios';
+
+// Create axios instance with base configuration
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8082/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor to handle auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear invalid token and redirect to login
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Authentication API functions
+export const loginUser = async (credentials) => {
+  const response = await api.post('/v1/auth/authenticate', credentials);
+  return response.data;
+};
+
+export const registerUser = async (userData) => {
+  const response = await api.post('/v1/auth/register', userData);
+  return response.data;
+};
+
+export const logoutUser = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+};
+
+// Password reset functions
+export const forgotPassword = async (data) => {
+  const response = await api.post('/v1/auth/forgot-password', data);
+  return response.data;
+};
+
+export const resetPassword = async (data) => {
+  const response = await api.post('/v1/auth/reset-password', data);
+  return response.data;
+};
+
+export const verifyResetToken = async (token) => {
+  const response = await api.get(`/v1/auth/verify-reset-token?token=${token}`);
+  return response.data;
+};
+
+// Email verification functions
+export const verifyEmail = async (token) => {
+  const response = await api.post('/v1/auth/verify-email', { token });
+  return response.data;
+};
+
+export const resendVerificationEmail = async (data) => {
+  const response = await api.post('/v1/auth/resend-verification', data);
+  return response.data;
+};
+
+// Health check
+export const checkHealth = async () => {
+  const response = await api.get('/health');
+  return response.data;
+};
+
+// User management
+export const getCurrentUser = () => {
+  const userStr = localStorage.getItem('user');
+  return userStr ? JSON.parse(userStr) : null;
+};
+
+export const isAuthenticated = () => {
+  return !!localStorage.getItem('token');
+};
+
+// Protected route helper
+export const requireAuth = () => {
+  if (!isAuthenticated()) {
+    window.location.href = '/login';
+    return false;
+  }
+  return true;
+};
+
+export default api;

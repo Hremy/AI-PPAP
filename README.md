@@ -1,4 +1,4 @@
-# AI-PAT (AI-Powered Performance Analysis Platform)
+# AI-PPAP (AI-Powered Performance Analysis Platform)
 
 - Frontend: React + Vite (port 5200)
 - Backend: Spring Boot (Java 21, port 8082)

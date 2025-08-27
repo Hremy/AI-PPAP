@@ -1,0 +1,258 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { 
+  ChartBarIcon, 
+  DocumentTextIcon, 
+  UserGroupIcon, 
+  CpuChipIcon,
+  ShieldCheckIcon,
+  ArrowTrendingUpIcon,
+  ClockIcon,
+  StarIcon,
+  CheckIcon
+} from '@heroicons/react/24/outline';
+
+const Features = () => {
+  const features = [
+    {
+      icon: ChartBarIcon,
+      title: 'Performance Analytics',
+      description: 'Comprehensive performance tracking with real-time analytics and insights.',
+      benefits: ['Real-time performance metrics', 'Historical trend analysis', 'Customizable KPIs', 'Interactive dashboards']
+    },
+    {
+      icon: DocumentTextIcon,
+      title: 'Smart Reviews',
+      description: 'AI-powered review system with self, manager, and 360° peer reviews.',
+      benefits: ['Automated review workflows', 'AI-assisted feedback', 'Multi-source reviews', 'Review templates']
+    },
+    {
+      icon: CpuChipIcon,
+      title: 'AI Insights',
+      description: 'Advanced AI analysis providing personalized recommendations and insights.',
+      benefits: ['Sentiment analysis', 'Performance predictions', 'Growth recommendations', 'Skill gap analysis']
+    },
+    {
+      icon: UserGroupIcon,
+      title: 'Team Management',
+      description: 'Comprehensive team oversight with collaborative performance management.',
+      benefits: ['Team performance tracking', 'Collaborative goal setting', 'Team comparisons', 'Manager dashboards']
+    },
+    {
+      icon: ShieldCheckIcon,
+      title: 'Enterprise Security',
+      description: 'Bank-level security with role-based access and data protection.',
+      benefits: ['Role-based permissions', 'Data encryption', 'Audit trails', 'Compliance ready']
+    },
+    {
+      icon: ArrowTrendingUpIcon,
+      title: 'Goal Tracking',
+      description: 'Smart goal setting and tracking with automated progress monitoring.',
+      benefits: ['SMART goal framework', 'Progress tracking', 'Milestone alerts', 'Achievement analytics']
+    }
+  ];
+
+  const integrations = [
+    { name: 'Slack', logo: '💬' },
+    { name: 'Microsoft Teams', logo: '👥' },
+    { name: 'Google Workspace', logo: '📧' },
+    { name: 'Jira', logo: '🎯' },
+    { name: 'Salesforce', logo: '☁️' },
+    { name: 'Workday', logo: '💼' }
+  ];
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Navigation */}
+      <nav className="bg-white/90 backdrop-blur-md border-b border-primary/20 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link to="/" className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-md">
+                <span className="text-secondary font-bold text-sm">AI</span>
+              </div>
+              <span className="text-xl font-bold text-secondary">AI-PPAP</span>
+            </Link>
+            <div className="hidden md:flex items-center space-x-6">
+              <Link to="/features" className="text-primary font-medium px-3 py-2 rounded-md text-sm transition-colors">
+                Features
+              </Link>
+              <Link to="/pricing" className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                Pricing
+              </Link>
+              <Link to="/about" className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                About
+              </Link>
+              <Link to="/login" className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                Sign In
+              </Link>
+              <Link to="/register" className="bg-primary text-secondary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all transform hover:scale-105 shadow-md">
+                Get Started
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl md:text-5xl font-bold text-secondary mb-6">
+            Powerful Features for Modern
+            <span className="text-primary"> Performance Management</span>
+          </h1>
+          <p className="text-xl text-secondary/70 mb-8 max-w-3xl mx-auto">
+            Discover how AI-PPAP transforms traditional performance reviews into intelligent, 
+            data-driven insights that drive real business results.
+          </p>
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12">
+            {features.map((feature, index) => (
+              <div key={index} className="bg-background rounded-2xl p-8 border border-primary/10">
+                <div className="flex items-start space-x-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center shadow-md">
+                      <feature.icon className="w-6 h-6 text-secondary" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold text-secondary mb-3">{feature.title}</h3>
+                    <p className="text-secondary/70 mb-4">{feature.description}</p>
+                    <ul className="space-y-2">
+                      {feature.benefits.map((benefit, benefitIndex) => (
+                        <li key={benefitIndex} className="flex items-center space-x-2">
+                          <CheckIcon className="w-4 h-4 text-primary flex-shrink-0" />
+                          <span className="text-sm text-secondary/80">{benefit}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-20 bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-secondary mb-4">
+              How AI-PPAP Works
+            </h2>
+            <p className="text-xl text-secondary/70 max-w-2xl mx-auto">
+              Simple, intelligent, and effective performance management in three steps.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-6">
+                <span className="text-2xl font-bold text-secondary">1</span>
+              </div>
+              <h3 className="text-xl font-semibold text-secondary mb-4">Collect Data</h3>
+              <p className="text-secondary/70">
+                Gather performance data through self-reviews, manager evaluations, and peer feedback with our intelligent forms.
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-6">
+                <span className="text-2xl font-bold text-secondary">2</span>
+              </div>
+              <h3 className="text-xl font-semibold text-secondary mb-4">AI Analysis</h3>
+              <p className="text-secondary/70">
+                Our AI engine analyzes feedback, identifies patterns, and generates insights to understand performance trends.
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-6">
+                <span className="text-2xl font-bold text-secondary">3</span>
+              </div>
+              <h3 className="text-xl font-semibold text-secondary mb-4">Drive Results</h3>
+              <p className="text-secondary/70">
+                Get actionable recommendations, track progress, and make data-driven decisions to improve performance.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Integrations */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-secondary mb-4">
+            Seamless Integrations
+          </h2>
+          <p className="text-xl text-secondary/70 mb-12 max-w-2xl mx-auto">
+            Connect AI-PPAP with your existing tools and workflows for a unified experience.
+          </p>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8">
+            {integrations.map((integration, index) => (
+              <div key={index} className="flex flex-col items-center p-6 bg-background rounded-xl border border-primary/10 hover:shadow-md transition-shadow">
+                <div className="text-4xl mb-3">{integration.logo}</div>
+                <span className="text-sm font-medium text-secondary">{integration.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-20 bg-primary">
+        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-secondary mb-6">
+            Ready to Transform Your Performance Management?
+          </h2>
+          <p className="text-xl text-secondary/80 mb-8">
+            Join thousands of companies using AI-PPAP to drive better results.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link 
+              to="/register" 
+              className="bg-white text-secondary px-8 py-4 rounded-xl text-lg font-semibold hover:bg-secondary/5 transition-colors flex items-center justify-center space-x-2 shadow-md"
+            >
+              <span>Start Free Trial</span>
+            </Link>
+            <Link 
+              to="/pricing" 
+              className="border-2 border-secondary text-secondary px-8 py-4 rounded-xl text-lg font-semibold hover:bg-secondary hover:text-white transition-colors"
+            >
+              View Pricing
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-secondary text-white py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <div className="flex items-center justify-center space-x-2 mb-4">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-md">
+                <span className="text-secondary font-bold text-sm">AI</span>
+              </div>
+              <span className="text-xl font-bold">AI-PPAP</span>
+            </div>
+            <p className="text-white/70 mb-4">
+              AI-Powered Performance & Productivity Assessment Platform
+            </p>
+            <div className="border-t border-white/20 pt-4">
+              <p className="text-white/70">&copy; 2025 AI-PPAP. All rights reserved.</p>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default Features;
