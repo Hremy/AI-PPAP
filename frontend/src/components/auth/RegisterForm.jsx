@@ -64,6 +64,15 @@ export default function RegisterForm() {
       return;
     }
 
+    // Only employees can sign up: prevent manager/admin signups (dev heuristic)
+    const lowerEmail = formData.email.toLowerCase();
+    if (lowerEmail.includes('manager') || lowerEmail.includes('admin')) {
+      setErrors({
+        general: 'Only employees can sign up. Managers must be added by an admin from the Admin > User Roles page.'
+      });
+      return;
+    }
+
     // Remove confirmPassword before sending to API
     const { confirmPassword, ...registrationData } = formData;
     registerMutation.mutate(registrationData);
@@ -92,10 +101,10 @@ export default function RegisterForm() {
             </svg>
           </div>
           <h2 className="mt-6 text-3xl font-bold text-secondary">
-            Create your account
+            Create your employee account
           </h2>
           <p className="mt-2 text-sm text-secondary/70">
-            Join AI-PPAP and start managing your documents
+            Employees can self-register. Managers must be created by an admin in the Admin Dashboard.
           </p>
         </div>
 
@@ -310,6 +319,9 @@ export default function RegisterForm() {
               <Link to="/login" className="font-medium text-primary hover:text-primary/80 transition-colors duration-200">
                 Sign in
               </Link>
+            </p>
+            <p className="mt-2 text-xs text-secondary/60">
+              Are you a manager? Contact your administrator to be added under Admin → User Roles.
             </p>
           </div>
         </form>

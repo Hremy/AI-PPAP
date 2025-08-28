@@ -16,6 +16,9 @@ import Register from './pages/auth/Register';
 import EmployeeDashboard from './pages/dashboard/EmployeeDashboard';
 import ManagerDashboard from './pages/dashboard/ManagerDashboard';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
+import AdminLayout from './pages/admin/AdminLayout';
+import UserRoles from './pages/admin/UserRoles';
+import EvaluationsPage from './pages/admin/EvaluationsPage';
 import Features from './pages/public/Features';
 import Profile from './pages/profile/Profile';
 import AdminLogin from './pages/auth/AdminLogin';
@@ -92,7 +95,27 @@ function App() {
               path="/admin/dashboard" 
               element={
                 <ProtectedRoute requiredRole="ROLE_ADMIN">
-                  <AdminDashboard />
+                  <AdminLayout>
+                    <AdminDashboard />
+                  </AdminLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/user-roles" 
+              element={
+                <ProtectedRoute requiredRole="ROLE_ADMIN">
+                  <AdminLayout>
+                    <UserRoles />
+                  </AdminLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/evaluations" 
+              element={
+                <ProtectedRoute requiredRoles={['ROLE_ADMIN', 'ROLE_MANAGER']}>
+                  <EvaluationsPage />
                 </ProtectedRoute>
               } 
             />
