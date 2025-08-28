@@ -2,11 +2,14 @@ import axios from 'axios';
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8082/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8084/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Small artificial delay to simulate network latency
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -24,8 +27,12 @@ api.interceptors.request.use(
 
 // Response interceptor to handle auth errors
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  async (response) => {
+    await sleep(400);
+    return response;
+  },
+  async (error) => {
+    await sleep(400);
     if (error.response?.status === 401) {
       // Clear invalid token and redirect to login
       localStorage.removeItem('token');
@@ -47,9 +54,16 @@ export const registerUser = async (userData) => {
   return response.data;
 };
 
-export const logoutUser = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+export const logoutUser = async () => {
+  try {
+    const res = await api.post('/v1/auth/logout');
+    return res.data;
+  } catch (_) {
+    // Even if server is unreachable, proceed with client-side cleanup
+  } finally {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }
 };
 
 // Password reset functions

@@ -76,7 +76,7 @@ The authentication system for the AI-PPAP backend has been successfully implemen
 - `GET /health` - Health check
 
 ### Environment Configuration
-- **Port**: 8082 (configurable)
+- **Port**: 8084 (configurable)
 - **Database**: PostgreSQL with connection pooling
 - **JWT**: Configurable secret and expiration
 - **CORS**: Frontend URL configuration

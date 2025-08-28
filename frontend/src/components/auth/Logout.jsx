@@ -7,11 +7,14 @@ export default function Logout() {
 
   useEffect(() => {
     // Clear tokens and user data, then redirect to login
-    try {
-      logoutUser();
-    } finally {
-      navigate('/login', { replace: true });
-    }
+    const doLogout = async () => {
+      try {
+        await logoutUser();
+      } finally {
+        navigate('/login', { replace: true });
+      }
+    };
+    doLogout();
   }, [navigate]);
 
   return null;

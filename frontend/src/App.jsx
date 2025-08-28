@@ -17,6 +17,8 @@ import EmployeeDashboard from './pages/dashboard/EmployeeDashboard';
 import ManagerDashboard from './pages/dashboard/ManagerDashboard';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
 import Features from './pages/public/Features';
+import Profile from './pages/profile/Profile';
+import AdminLogin from './pages/auth/AdminLogin';
 
 import './index.css';
 
@@ -38,7 +40,14 @@ function App() {
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<HomePage />} />
-            <Route path="/features" element={<Features />} />
+            <Route 
+              path="/features" 
+              element={
+                <ProtectedRoute requiredRole="ROLE_EMPLOYEE">
+                  <Features />
+                </ProtectedRoute>
+              } 
+            />
             <Route path="/pricing" element={<div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Pricing Page</h1><p className="text-secondary/70">Coming Soon...</p></div></div>} />
             <Route path="/about" element={<div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">About Page</h1><p className="text-secondary/70">Coming Soon...</p></div></div>} />
             
@@ -49,6 +58,9 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPasswordForm />} />
             <Route path="/reset-password" element={<ResetPasswordForm />} />
             <Route path="/verify-email" element={<EmailVerification />} />
+            {/* Admin Login */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
             
             {/* Protected routes - Role-based dashboards */}
             <Route 
@@ -56,6 +68,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <EmployeeDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            {/* Profile */}
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <Profile />
                 </ProtectedRoute>
               } 
             />

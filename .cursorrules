@@ -1,6 +1,6 @@
 # AI-PPAP Cursor Rules
 - Java 21, Spring Boot 3, React + Vite.
-- Fixed ports: backend 8082, frontend 5200.
+- Fixed ports: backend 8084, frontend 5200.
 - Use env-based base URLs; localhost only as fallback in dev.
 - Backend: layered architecture; DTOs; Flyway migrations.
 - Frontend: React Router, React Query, Tailwind.

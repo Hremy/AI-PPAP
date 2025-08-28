@@ -12,7 +12,7 @@ import {
   StarIcon,
   CheckIcon
 } from '@heroicons/react/24/outline';
-import { getFeaturesPageData } from '../../lib/api';
+import { getFeaturesPageData, isAuthenticated, getCurrentUser } from '../../lib/api';
 
 const Features = () => {
   // Icon mapping for dynamic icon rendering
@@ -71,6 +71,52 @@ const Features = () => {
       benefits: ['SMART goal framework', 'Progress tracking', 'Milestone alerts', 'Achievement analytics']
     }
   ];
+
+  // Role-based highlights (fallback)
+  const fallbackRoleHighlights = {
+    employee: [
+      'Personal performance dashboard',
+      'Self-reviews with AI assistance',
+      'Goal tracking and progress',
+      'Performance history & trends'
+    ],
+    manager: [
+      'Team performance dashboard',
+      'Manager evaluations & feedback',
+      'Review cycle management',
+      'Talent insights & coaching tips'
+    ],
+    admin: [
+      'Organization-wide analytics',
+      'User & role management',
+      'KPI and workflow configuration',
+      'Security & compliance controls'
+    ]
+  };
+
+  // Security badges (fallback)
+  const fallbackSecurityBadges = [
+    'Role-based access control',
+    'Audit trails',
+    'Encryption in transit',
+    'JWT-based authentication',
+    'Compliance ready'
+  ];
+
+  // Customer logos (emoji placeholders)
+  const fallbackCustomerLogos = ['🏢', '🏬', '🏭', '🏦', '🏨', '🏫'];
+
+  // FAQ (fallback)
+  const fallbackFaq = [
+    { q: 'How are roles handled?', a: 'We use role-based access control (Employee, Manager, Admin) with JWT auth.' },
+    { q: 'Can we customize KPIs?', a: 'Yes. Admins can define KPIs, weights, and evaluation criteria.' },
+    { q: 'Do you support peer reviews?', a: 'Yes. 360°/peer reviews are supported as part of review workflows.' },
+    { q: 'Is our data secure?', a: 'Traffic is protected and actions are logged. Enterprise security best practices are followed.' },
+    { q: 'Does it integrate with our tools?', a: 'We support common tools (Slack, Google Workspace, Jira, Salesforce, and more).'}
+  ];
+
+  // UI state for role tabs
+  const [activeRole, setActiveRole] = useState('employee');
 
   const fallbackIntegrations = [
     { name: 'Slack', logo: '💬' },
@@ -138,12 +184,30 @@ const Features = () => {
               <Link to="/about" className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors">
                 About
               </Link>
-              <Link to="/login" className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                Sign In
-              </Link>
-              <Link to="/register" className="bg-primary text-secondary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all transform hover:scale-105 shadow-md">
-                Get Started
-              </Link>
+              {isAuthenticated() ? (
+                <>
+                  <Link to="/profile" className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-secondary/5 transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+                      {(getCurrentUser()?.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-sm text-secondary/80 max-w-[180px] truncate">
+                      {getCurrentUser()?.email}
+                    </span>
+                  </Link>
+                  <Link to="/logout" className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    Logout
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    Sign In
+                  </Link>
+                  <Link to="/register" className="bg-primary text-secondary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all transform hover:scale-105 shadow-md">
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -197,6 +261,63 @@ const Features = () => {
         </div>
       </section>
 
+      {/* Role-Based Highlights */}
+      <section className="py-20 bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold text-secondary mb-4">Built for Every Role</h2>
+            <p className="text-secondary/70">Tailored experiences for employees, managers, and administrators.</p>
+          </div>
+          <div className="flex justify-center mb-8">
+            <div className="bg-white rounded-xl shadow-sm border border-primary/20 p-1 flex">
+              {['employee','manager','admin'].map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setActiveRole(role)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeRole === role ? 'bg-primary text-secondary shadow-sm' : 'text-secondary/70 hover:text-secondary'
+                  }`}
+                >
+                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-primary/10 p-8">
+            <ul className="grid md:grid-cols-2 gap-3">
+              {(fallbackRoleHighlights[activeRole] || []).map((item, idx) => (
+                <li key={idx} className="flex items-start space-x-2">
+                  <CheckIcon className="w-4 h-4 mt-1 text-primary" />
+                  <span className="text-secondary/80">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Analytics Preview */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold text-secondary mb-4">Actionable Analytics</h2>
+            <p className="text-secondary/70">Get a snapshot of performance with intuitive KPIs and trends.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[{label:'Overall Score',value:'86%'},{label:'On-time Reviews',value:'92%'},{label:'Goal Progress',value:'74%'},{label:'Engagement',value:'88%'}].map((kpi, i) => (
+              <div key={i} className="bg-background rounded-xl p-6 border border-primary/10">
+                <p className="text-secondary/70 text-sm mb-2">{kpi.label}</p>
+                <p className="text-2xl font-bold text-secondary">{kpi.value}</p>
+                <div className="mt-4 h-2 bg-white rounded-full overflow-hidden border border-primary/10">
+                  <div className="h-full bg-primary" style={{ width: kpi.value }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* How It Works */}
       <section className="py-20 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -243,6 +364,52 @@ const Features = () => {
                 {integration.description && (
                   <p className="text-xs text-secondary/60 mt-2 text-center">{integration.description}</p>
                 )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Security & Compliance */}
+      <section className="py-20 bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold text-secondary mb-4">Enterprise-grade Security</h2>
+            <p className="text-secondary/70">Protect data with robust controls and best practices.</p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {fallbackSecurityBadges.map((badge, i) => (
+              <div key={i} className="bg-white rounded-xl border border-primary/10 p-4 text-center">
+                <span className="text-sm font-medium text-secondary">{badge}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Customer Logos */}
+      <section className="py-12 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-center gap-8 opacity-80">
+            {fallbackCustomerLogos.map((logo, i) => (
+              <div key={i} className="text-4xl">{logo}</div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="py-20 bg-background">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold text-secondary mb-4">Frequently Asked Questions</h2>
+            <p className="text-secondary/70">Answers to the most common questions.</p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            {fallbackFaq.map((item, i) => (
+              <div key={i} className="bg-white rounded-xl border border-primary/10 p-6">
+                <h3 className="font-semibold text-secondary mb-2">{item.q}</h3>
+                <p className="text-secondary/70 text-sm">{item.a}</p>
               </div>
             ))}
           </div>

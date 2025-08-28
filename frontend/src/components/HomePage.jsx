@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { isAuthenticated, getCurrentUser } from '../lib/api';
 import { 
   ChartBarIcon, 
   UserGroupIcon, 
@@ -99,18 +100,43 @@ const HomePage = () => {
               >
                 About
               </Link>
-              <Link 
-                to="/login" 
-                className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Sign In
-              </Link>
-              <Link 
-                to="/register" 
-                className="bg-primary text-secondary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all transform hover:scale-105 shadow-md"
-              >
-                Get Started
-              </Link>
+
+              {isAuthenticated() ? (
+                <>
+                  <Link 
+                    to="/profile" 
+                    className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-secondary/5 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold">
+                      {(getCurrentUser()?.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-sm text-secondary/80 max-w-[180px] truncate">
+                      {getCurrentUser()?.email}
+                    </span>
+                  </Link>
+                  <Link 
+                    to="/logout" 
+                    className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Logout
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link 
+                    to="/login" 
+                    className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                  <Link 
+                    to="/register" 
+                    className="bg-primary text-secondary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-all transform hover:scale-105 shadow-md"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

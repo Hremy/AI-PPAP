@@ -75,7 +75,7 @@ export default function ProtectedRoute({ children, requiredRole }) {
         return <Navigate to="/manager/dashboard" replace />;
       case 'ROLE_EMPLOYEE':
       default:
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to="/" replace />;
     }
   }
 

@@ -28,15 +28,33 @@ export default function LoginForm() {
   const loginMutation = useMutation({
     mutationFn: loginUser,
     onSuccess: (data) => {
-      // Store token in localStorage
+      // Normalize role to always include ROLE_ prefix
+      const normalizedRole = data.role?.startsWith('ROLE_') ? data.role : `ROLE_${data.role}`;
+
+      // Map selected toggle to expected backend role
+      const expectedByToggle = {
+        employee: 'ROLE_EMPLOYEE',
+        manager: 'ROLE_MANAGER',
+        admin: 'ROLE_ADMIN',
+      }[formData.loginAs];
+
+      // Enforce that selected role matches backend-provided role
+      if (normalizedRole !== expectedByToggle) {
+        setErrors({
+          general: 'Incorrect role selected for this account. Please choose the correct role and try again.',
+        });
+        return; // Do not persist token/user or navigate
+      }
+
+      // Store token and user only after role check passes
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify({
         email: data.email,
-        role: data.role
+        role: normalizedRole,
       }));
-      
+
       // Route based on actual user role from backend
-      switch (data.role) {
+      switch (normalizedRole) {
         case 'ROLE_ADMIN':
           navigate('/admin/dashboard');
           break;
@@ -45,7 +63,7 @@ export default function LoginForm() {
           break;
         case 'ROLE_EMPLOYEE':
         default:
-          navigate('/dashboard');
+          navigate('/');
           break;
       }
     },

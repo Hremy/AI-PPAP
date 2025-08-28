@@ -103,7 +103,7 @@ const EmployeeDashboard = () => {
             </div>
             <div className="flex items-center space-x-4">
               <Link 
-                to="/settings/profile" 
+                to="/profile" 
                 className="flex items-center space-x-2 text-secondary/70 hover:text-secondary transition-colors"
               >
                 <UserIcon className="w-5 h-5" />
