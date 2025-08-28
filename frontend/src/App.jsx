@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './contexts/AuthContext';
 import HomePage from './components/HomePage';
 import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
@@ -16,9 +18,14 @@ import Register from './pages/auth/Register';
 import EmployeeDashboard from './pages/dashboard/EmployeeDashboard';
 import ManagerDashboard from './pages/dashboard/ManagerDashboard';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
+import AdminLayout from './pages/admin/AdminLayout';
+import UserRoles from './pages/admin/UserRoles';
+import EvaluationsPage from './pages/admin/EvaluationsPage';
 import Features from './pages/public/Features';
+import EvaluationPage from './pages/EvaluationPage';
 import Profile from './pages/profile/Profile';
 import AdminLogin from './pages/auth/AdminLogin';
+import RoleDashboard from './components/dashboard/RoleDashboard';
 
 import './index.css';
 
@@ -36,20 +43,21 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <div className="App">
+        <AuthProvider>
+          <div className="App">
+            <Toaster position="top-right" />
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<HomePage />} />
-            <Route 
-              path="/features" 
-              element={
-                <ProtectedRoute requiredRole="ROLE_EMPLOYEE">
-                  <Features />
-                </ProtectedRoute>
-              } 
-            />
             <Route path="/pricing" element={<div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Pricing Page</h1><p className="text-secondary/70">Coming Soon...</p></div></div>} />
             <Route path="/about" element={<div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">About Page</h1><p className="text-secondary/70">Coming Soon...</p></div></div>} />
+            
+            {/* Protected routes */}
+            <Route path="/evaluation" element={
+              <ProtectedRoute>
+                <EvaluationPage />
+              </ProtectedRoute>
+            } />
             
             {/* Authentication routes */}
             <Route path="/login" element={<LoginForm />} />
@@ -67,10 +75,39 @@ function App() {
               path="/dashboard" 
               element={
                 <ProtectedRoute>
+                  <RoleDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Specific role-based dashboard routes */}
+            <Route 
+              path="/employee/dashboard" 
+              element={
+                <ProtectedRoute requiredRole="EMPLOYEE">
                   <EmployeeDashboard />
                 </ProtectedRoute>
               } 
             />
+            <Route 
+              path="/manager/dashboard" 
+              element={
+                <ProtectedRoute requiredRole="MANAGER">
+                  <ManagerDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/dashboard" 
+              element={
+                <ProtectedRoute requiredRole="ADMIN">
+                  <AdminLayout>
+                    <AdminDashboard />
+                  </AdminLayout>
+                </ProtectedRoute>
+              } 
+            />
+            
             {/* Profile */}
             <Route 
               path="/profile" 
@@ -81,18 +118,20 @@ function App() {
               } 
             />
             <Route 
-              path="/manager/dashboard" 
+              path="/admin/user-roles" 
               element={
-                <ProtectedRoute requiredRole="ROLE_MANAGER">
-                  <ManagerDashboard />
+                <ProtectedRoute requiredRole="ADMIN">
+                  <AdminLayout>
+                    <UserRoles />
+                  </AdminLayout>
                 </ProtectedRoute>
               } 
             />
             <Route 
-              path="/admin/dashboard" 
+              path="/admin/evaluations" 
               element={
-                <ProtectedRoute requiredRole="ROLE_ADMIN">
-                  <AdminDashboard />
+                <ProtectedRoute requiredRoles={['ADMIN', 'MANAGER']}>
+                  <EvaluationsPage />
                 </ProtectedRoute>
               } 
             />
@@ -107,7 +146,8 @@ function App() {
             {/* Default redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </div>
+          </div>
+        </AuthProvider>
       </Router>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

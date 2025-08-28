@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import EvaluationsTable from '../../components/evaluation/EvaluationsTable';
 import { 
   UserGroupIcon, 
   DocumentTextIcon, 
@@ -277,6 +278,11 @@ const ManagerDashboard = () => {
           </div>
         </div>
 
+        {/* Submitted Evaluations Table */}
+        <div className="mt-8">
+          <EvaluationsTable />
+        </div>
+
         {/* Team Performance Summary */}
         <div className="mt-8">
           <div className="bg-white rounded-xl shadow-sm border border-primary/10 p-6">
@@ -318,4 +324,5 @@ const ManagerDashboard = () => {
 };
 
 export default ManagerDashboard;
+
 

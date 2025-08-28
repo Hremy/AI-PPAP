@@ -1,57 +1,11 @@
-import { useEffect, useState } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { isAuthenticated } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 
-export default function ProtectedRoute({ children, requiredRole }) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuth, setIsAuth] = useState(false);
-  const [userRole, setUserRole] = useState(null);
-  const [hasAccess, setHasAccess] = useState(false);
+export default function ProtectedRoute({ children, requiredRole, requiredRoles }) {
+  const { currentUser, isAuthenticated, loading, hasRole } = useAuth();
 
-  useEffect(() => {
-    const checkAuth = () => {
-      const authenticated = isAuthenticated();
-      setIsAuth(authenticated);
-      
-      if (authenticated) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const role = user.role;
-        setUserRole(role);
-        
-        // Check role-based access
-        if (requiredRole) {
-          // Admin can access everything
-          if (role === 'ROLE_ADMIN') {
-            setHasAccess(true);
-          }
-          // Manager can access manager and employee routes
-          else if (role === 'ROLE_MANAGER' && (requiredRole === 'ROLE_MANAGER' || requiredRole === 'ROLE_EMPLOYEE')) {
-            setHasAccess(true);
-          }
-          // Employee can only access employee routes
-          else if (role === 'ROLE_EMPLOYEE' && requiredRole === 'ROLE_EMPLOYEE') {
-            setHasAccess(true);
-          }
-          // Exact role match
-          else if (role === requiredRole) {
-            setHasAccess(true);
-          }
-          else {
-            setHasAccess(false);
-          }
-        } else {
-          // No specific role required, just need to be authenticated
-          setHasAccess(true);
-        }
-      }
-      
-      setIsLoading(false);
-    };
-
-    checkAuth();
-  }, [requiredRole]);
-
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -62,20 +16,34 @@ export default function ProtectedRoute({ children, requiredRole }) {
     );
   }
 
-  if (!isAuth) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && !hasAccess) {
-    // Redirect to appropriate dashboard based on user's actual role
-    switch (userRole) {
-      case 'ROLE_ADMIN':
+  // Check role-based access
+  if (requiredRole || requiredRoles) {
+    let hasAccess = false;
+
+    // Check single required role
+    if (requiredRole) {
+      hasAccess = hasRole(requiredRole);
+    }
+
+    // Check multiple required roles (user needs at least one)
+    if (requiredRoles && Array.isArray(requiredRoles)) {
+      hasAccess = requiredRoles.some(role => hasRole(role));
+    }
+
+    if (!hasAccess) {
+      // Redirect to appropriate dashboard based on user's actual role
+      if (hasRole('ADMIN')) {
         return <Navigate to="/admin/dashboard" replace />;
-      case 'ROLE_MANAGER':
+      } else if (hasRole('MANAGER')) {
         return <Navigate to="/manager/dashboard" replace />;
-      case 'ROLE_EMPLOYEE':
-      default:
+      } else {
+        // Employee or no role - redirect to home
         return <Navigate to="/" replace />;
+      }
     }
   }
 

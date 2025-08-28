@@ -130,6 +130,29 @@ export const isAuthenticated = () => {
   return !!localStorage.getItem('token');
 };
 
+// Self-evaluation
+/**
+ * Submits a self-evaluation
+ * @param {Object} evaluationData - The evaluation data to submit
+ * @returns {Promise<Object>} The API response
+ */
+export const submitEvaluation = async (evaluationData) => {
+  const response = await api.post('/v1/evaluations/self', evaluationData);
+  return response.data;
+};
+
+// Get user's self-evaluations
+export const getUserEvaluations = async (userId) => {
+  const response = await api.get(`/v1/evaluations/user/${userId}`);
+  return response.data;
+};
+
+// Get a specific evaluation
+export const getEvaluation = async (evaluationId) => {
+  const response = await api.get(`/v1/evaluations/${evaluationId}`);
+  return response.data;
+};
+
 // Protected route helper
 export const requireAuth = () => {
   if (!isAuthenticated()) {
@@ -137,6 +160,17 @@ export const requireAuth = () => {
     return false;
   }
   return true;
+};
+
+// Admin: managers
+export const getManagers = async () => {
+  const res = await api.get('/v1/admin/managers');
+  return res.data;
+};
+
+export const createManager = async (manager) => {
+  const res = await api.post('/v1/admin/managers', manager);
+  return res.data;
 };
 
 export default api;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import EvaluationsTable from '../../components/evaluation/EvaluationsTable';
 import { 
   BuildingOfficeIcon,
   UserGroupIcon, 
@@ -298,6 +299,11 @@ const AdminDashboard = () => {
           </div>
         </div>
 
+        {/* Submitted Evaluations Table */}
+        <div className="mt-8">
+          <EvaluationsTable />
+        </div>
+
         {/* Alerts & Notifications */}
         {adminData.pendingApprovals > 0 && (
           <div className="mt-8">
@@ -326,4 +332,5 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+
 
