@@ -30,25 +30,9 @@ const Register = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify({
-        email: data.email,
-        role: data.role
-      }));
-      
-      // Route based on role
-      switch (data.role) {
-        case 'ROLE_ADMIN':
-          navigate('/admin/dashboard');
-          break;
-        case 'ROLE_MANAGER':
-          navigate('/manager/dashboard');
-          break;
-        case 'ROLE_EMPLOYEE':
-        default:
-          navigate('/dashboard');
-          break;
-      }
+      // After successful registration, require user to log in
+      // Do NOT auto-login or store token/user here
+      navigate('/login', { replace: true, state: { registeredEmail: data.email } });
     },
     onError: (error) => {
       setErrors({ 

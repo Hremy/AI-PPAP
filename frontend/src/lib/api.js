@@ -85,6 +85,27 @@ export const checkHealth = async () => {
   return response.data;
 };
 
+// Features API functions
+export const getFeaturesPageData = async () => {
+  const response = await api.get('/v1/features');
+  return response.data;
+};
+
+export const getAllFeatures = async () => {
+  const response = await api.get('/v1/features/list');
+  return response.data;
+};
+
+export const getAllIntegrations = async () => {
+  const response = await api.get('/v1/features/integrations');
+  return response.data;
+};
+
+export const getAllWorkflowSteps = async () => {
+  const response = await api.get('/v1/features/workflow');
+  return response.data;
+};
+
 // User management
 export const getCurrentUser = () => {
   const userStr = localStorage.getItem('user');

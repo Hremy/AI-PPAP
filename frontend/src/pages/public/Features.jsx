@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { 
   ChartBarIcon, 
   DocumentTextIcon, 
@@ -11,48 +12,67 @@ import {
   StarIcon,
   CheckIcon
 } from '@heroicons/react/24/outline';
+import { getFeaturesPageData } from '../../lib/api';
 
 const Features = () => {
-  const features = [
+  // Icon mapping for dynamic icon rendering
+  const iconMap = {
+    'ChartBarIcon': ChartBarIcon,
+    'DocumentTextIcon': DocumentTextIcon,
+    'CpuChipIcon': CpuChipIcon,
+    'UserGroupIcon': UserGroupIcon,
+    'ShieldCheckIcon': ShieldCheckIcon,
+    'ArrowTrendingUpIcon': ArrowTrendingUpIcon
+  };
+
+  // Fetch features page data from API
+  const { data: featuresData, isLoading, error } = useQuery({
+    queryKey: ['featuresPageData'],
+    queryFn: getFeaturesPageData,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fallback data in case API fails
+  const fallbackFeatures = [
     {
-      icon: ChartBarIcon,
+      icon: 'ChartBarIcon',
       title: 'Performance Analytics',
       description: 'Comprehensive performance tracking with real-time analytics and insights.',
       benefits: ['Real-time performance metrics', 'Historical trend analysis', 'Customizable KPIs', 'Interactive dashboards']
     },
     {
-      icon: DocumentTextIcon,
+      icon: 'DocumentTextIcon',
       title: 'Smart Reviews',
       description: 'AI-powered review system with self, manager, and 360° peer reviews.',
       benefits: ['Automated review workflows', 'AI-assisted feedback', 'Multi-source reviews', 'Review templates']
     },
     {
-      icon: CpuChipIcon,
+      icon: 'CpuChipIcon',
       title: 'AI Insights',
       description: 'Advanced AI analysis providing personalized recommendations and insights.',
       benefits: ['Sentiment analysis', 'Performance predictions', 'Growth recommendations', 'Skill gap analysis']
     },
     {
-      icon: UserGroupIcon,
+      icon: 'UserGroupIcon',
       title: 'Team Management',
       description: 'Comprehensive team oversight with collaborative performance management.',
       benefits: ['Team performance tracking', 'Collaborative goal setting', 'Team comparisons', 'Manager dashboards']
     },
     {
-      icon: ShieldCheckIcon,
+      icon: 'ShieldCheckIcon',
       title: 'Enterprise Security',
       description: 'Bank-level security with role-based access and data protection.',
       benefits: ['Role-based permissions', 'Data encryption', 'Audit trails', 'Compliance ready']
     },
     {
-      icon: ArrowTrendingUpIcon,
+      icon: 'ArrowTrendingUpIcon',
       title: 'Goal Tracking',
       description: 'Smart goal setting and tracking with automated progress monitoring.',
       benefits: ['SMART goal framework', 'Progress tracking', 'Milestone alerts', 'Achievement analytics']
     }
   ];
 
-  const integrations = [
+  const fallbackIntegrations = [
     { name: 'Slack', logo: '💬' },
     { name: 'Microsoft Teams', logo: '👥' },
     { name: 'Google Workspace', logo: '📧' },
@@ -60,6 +80,41 @@ const Features = () => {
     { name: 'Salesforce', logo: '☁️' },
     { name: 'Workday', logo: '💼' }
   ];
+
+  const fallbackWorkflowSteps = [
+    {
+      stepNumber: 1,
+      title: 'Collect Data',
+      description: 'Gather performance data through self-reviews, manager evaluations, and peer feedback with our intelligent forms.'
+    },
+    {
+      stepNumber: 2,
+      title: 'AI Analysis',
+      description: 'Our AI engine analyzes feedback, identifies patterns, and generates insights to understand performance trends.'
+    },
+    {
+      stepNumber: 3,
+      title: 'Drive Results',
+      description: 'Get actionable recommendations, track progress, and make data-driven decisions to improve performance.'
+    }
+  ];
+
+  // Use API data if available, otherwise fallback to static data
+  const features = featuresData?.features || fallbackFeatures;
+  const integrations = featuresData?.integrations || fallbackIntegrations;
+  const workflowSteps = featuresData?.workflowSteps || fallbackWorkflowSteps;
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-secondary/70">Loading features...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -112,29 +167,32 @@ const Features = () => {
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12">
-            {features.map((feature, index) => (
-              <div key={index} className="bg-background rounded-2xl p-8 border border-primary/10">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0">
-                    <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center shadow-md">
-                      <feature.icon className="w-6 h-6 text-secondary" />
+            {features.map((feature, index) => {
+              const IconComponent = iconMap[feature.icon] || ChartBarIcon;
+              return (
+                <div key={feature.id || index} className="bg-background rounded-2xl p-8 border border-primary/10">
+                  <div className="flex items-start space-x-4">
+                    <div className="flex-shrink-0">
+                      <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center shadow-md">
+                        <IconComponent className="w-6 h-6 text-secondary" />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-semibold text-secondary mb-3">{feature.title}</h3>
+                      <p className="text-secondary/70 mb-4">{feature.description}</p>
+                      <ul className="space-y-2">
+                        {feature.benefits.map((benefit, benefitIndex) => (
+                          <li key={benefitIndex} className="flex items-center space-x-2">
+                            <CheckIcon className="w-4 h-4 text-primary flex-shrink-0" />
+                            <span className="text-sm text-secondary/80">{benefit}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-secondary mb-3">{feature.title}</h3>
-                    <p className="text-secondary/70 mb-4">{feature.description}</p>
-                    <ul className="space-y-2">
-                      {feature.benefits.map((benefit, benefitIndex) => (
-                        <li key={benefitIndex} className="flex items-center space-x-2">
-                          <CheckIcon className="w-4 h-4 text-primary flex-shrink-0" />
-                          <span className="text-sm text-secondary/80">{benefit}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -152,35 +210,17 @@ const Features = () => {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-6">
-                <span className="text-2xl font-bold text-secondary">1</span>
+            {workflowSteps.map((step, index) => (
+              <div key={step.id || index} className="text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-6">
+                  <span className="text-2xl font-bold text-secondary">{step.stepNumber}</span>
+                </div>
+                <h3 className="text-xl font-semibold text-secondary mb-4">{step.title}</h3>
+                <p className="text-secondary/70">
+                  {step.description}
+                </p>
               </div>
-              <h3 className="text-xl font-semibold text-secondary mb-4">Collect Data</h3>
-              <p className="text-secondary/70">
-                Gather performance data through self-reviews, manager evaluations, and peer feedback with our intelligent forms.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-6">
-                <span className="text-2xl font-bold text-secondary">2</span>
-              </div>
-              <h3 className="text-xl font-semibold text-secondary mb-4">AI Analysis</h3>
-              <p className="text-secondary/70">
-                Our AI engine analyzes feedback, identifies patterns, and generates insights to understand performance trends.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-6">
-                <span className="text-2xl font-bold text-secondary">3</span>
-              </div>
-              <h3 className="text-xl font-semibold text-secondary mb-4">Drive Results</h3>
-              <p className="text-secondary/70">
-                Get actionable recommendations, track progress, and make data-driven decisions to improve performance.
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       </section>
@@ -197,9 +237,12 @@ const Features = () => {
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8">
             {integrations.map((integration, index) => (
-              <div key={index} className="flex flex-col items-center p-6 bg-background rounded-xl border border-primary/10 hover:shadow-md transition-shadow">
+              <div key={integration.id || index} className="flex flex-col items-center p-6 bg-background rounded-xl border border-primary/10 hover:shadow-md transition-shadow">
                 <div className="text-4xl mb-3">{integration.logo}</div>
                 <span className="text-sm font-medium text-secondary">{integration.name}</span>
+                {integration.description && (
+                  <p className="text-xs text-secondary/60 mt-2 text-center">{integration.description}</p>
+                )}
               </div>
             ))}
           </div>

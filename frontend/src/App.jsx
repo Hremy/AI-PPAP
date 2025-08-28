@@ -9,6 +9,7 @@ import ResetPasswordForm from './components/auth/ResetPasswordForm';
 import EmailVerification from './components/auth/EmailVerification';
 import Dashboard from './components/dashboard/Dashboard';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import Logout from './components/auth/Logout';
 
 // New Pages
 import Register from './pages/auth/Register';
@@ -44,6 +45,7 @@ function App() {
             {/* Authentication routes */}
             <Route path="/login" element={<LoginForm />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/logout" element={<Logout />} />
             <Route path="/forgot-password" element={<ForgotPasswordForm />} />
             <Route path="/reset-password" element={<ResetPasswordForm />} />
             <Route path="/verify-email" element={<EmailVerification />} />
