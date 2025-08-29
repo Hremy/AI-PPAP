@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { getAuthToken, setAuthToken, removeAuthToken } from '../utils/auth';
+import { logoutUser } from '../lib/api';
 
 const AuthContext = createContext(null);
 
@@ -48,10 +49,19 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
-  const logout = () => {
-    removeAuthToken();
-    setCurrentUser(null);
-    navigate('/login');
+  const logout = async () => {
+    try {
+      // Try to call the server-side logout endpoint
+      await logoutUser();
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Continue with client-side cleanup even if server logout fails
+    } finally {
+      // Always perform client-side cleanup
+      removeAuthToken();
+      setCurrentUser(null);
+      navigate('/login');
+    }
   };
 
   const hasRole = (role) => {
@@ -62,13 +72,21 @@ export const AuthProvider = ({ children }) => {
     return normalizedUserRoles.includes(normalizedRole);
   };
 
+  const updateUser = (updatedUserData) => {
+    setCurrentUser(prevUser => ({
+      ...prevUser,
+      ...updatedUserData
+    }));
+  };
+
   const value = {
     currentUser,
     isAuthenticated: !!currentUser,
     loading,
     login,
     logout,
-    hasRole
+    hasRole,
+    updateUser
   };
 
   return (

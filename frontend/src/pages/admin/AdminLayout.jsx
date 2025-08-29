@@ -1,56 +1,118 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Squares2X2Icon,
   UsersIcon,
   DocumentTextIcon,
   Cog6ToothIcon,
-  ArrowRightOnRectangleIcon,
+  ArrowLeftIcon,
+  UserIcon,
+  FolderIcon,
 } from '@heroicons/react/24/outline';
 
-const navItems = [
-  { to: '/admin/dashboard', label: 'Dashboard', icon: Squares2X2Icon },
-  { to: '/admin/evaluations', label: 'Evaluations', icon: DocumentTextIcon },
-  { to: '/admin/user-roles', label: 'User Roles', icon: UsersIcon },
-  { to: '/admin/settings', label: 'Settings', icon: Cog6ToothIcon },
+const navigation = [
+  { name: 'Dashboard', href: '/admin/dashboard', icon: Squares2X2Icon },
+  { name: 'Evaluations', href: '/admin/evaluations', icon: DocumentTextIcon },
+  { name: 'Projects', href: '/admin/projects', icon: FolderIcon },
+  { name: 'User Roles', href: '/admin/user-roles', icon: UsersIcon },
+  { name: 'Profile', href: '/admin/profile', icon: UserIcon },
+  { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
 ];
 
 export default function AdminLayout({ children }) {
+  const { currentUser, logout } = useAuth();
+  const location = useLocation();
+  const orgName = (typeof localStorage !== 'undefined' && localStorage.getItem('ai_ppap_org_name')) || 'AI-PPPA';
+
+  const isActive = (href) => location.pathname === href;
+
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-primary/10 hidden md:flex md:flex-col">
-        <div className="h-16 flex items-center px-6 border-b border-primary/10">
-          <span className="text-lg font-bold text-secondary">Admin</span>
+      <div className="fixed inset-y-0 left-0 z-50 w-64 shadow-lg" style={{backgroundColor: '#002035'}}>
+        <div className="flex h-full flex-col">
+          {/* Logo */}
+          <div className="flex h-16 shrink-0 items-center px-6 border-b border-white/10">
+            <Link to="/" className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center shadow-md">
+                <span className="text-white font-bold text-sm">AI</span>
+              </div>
+              <span className="text-xl font-bold text-white">{orgName}</span>
+            </Link>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex flex-1 flex-col px-6 py-6">
+            <ul role="list" className="flex flex-1 flex-col gap-y-7">
+              <li>
+                <ul role="list" className="-mx-2 space-y-1">
+                  {navigation.map((item) => (
+                    <li key={item.name}>
+                      <Link
+                        to={item.href}
+                        className={`
+                          group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-colors
+                          ${isActive(item.href)
+                            ? 'bg-white/20 text-white'
+                            : 'text-white/80 hover:text-white hover:bg-white/10'
+                          }
+                        `}
+                      >
+                        <item.icon className="h-6 w-6 shrink-0" />
+                        {item.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+
+              {/* Return to Homepage */}
+              <li className="mt-auto">
+                <Link
+                  to="/"
+                  className="group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <ArrowLeftIcon className="h-6 w-6 shrink-0" />
+                  Return to Homepage
+                </Link>
+              </li>
+            </ul>
+          </nav>
+
+          {/* User menu */}
+          <div className="border-t border-white/10 p-6">
+            <div className="flex items-center gap-x-4">
+              <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                <UserIcon className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-white">
+                  {currentUser?.firstName} {currentUser?.lastName}
+                </p>
+                <p className="text-xs text-white/70">Admin</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={logout}
+                className="block w-full text-left px-3 py-2 text-sm text-white/80 hover:bg-white/10 hover:text-white rounded-md transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-secondary/80 hover:bg-background hover:text-secondary'
-                }`
-              }
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="text-sm font-medium">{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-        <div className="p-4 border-t border-primary/10">
-          <NavLink to="/logout" className="flex items-center space-x-3 px-3 py-2 rounded-lg text-secondary/80 hover:text-secondary">
-            <ArrowRightOnRectangleIcon className="w-5 h-5" />
-            <span className="text-sm font-medium">Logout</span>
-          </NavLink>
-        </div>
-      </aside>
+      </div>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0">{children}</main>
+      <div className="pl-64">
+        <main className="py-10">
+          <div className="px-4 sm:px-6 lg:px-8">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

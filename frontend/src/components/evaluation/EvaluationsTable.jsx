@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { TrashIcon } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
+import ReviewModal from './ReviewModal';
 
 const EvaluationsTable = () => {
   const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedEvaluation, setSelectedEvaluation] = useState(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState({ isOpen: false, evaluationId: null, employeeName: '' });
+  
+  const queryClient = useQueryClient();
 
   // Fetch evaluations from backend
   const fetchEvaluations = async () => {
     try {
-      const response = await fetch('http://localhost:8084/api/evaluations', {
+      const response = await fetch('http://localhost:8084/api/v1/evaluations', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -59,7 +67,22 @@ const EvaluationsTable = () => {
     );
   };
 
-  const calculateAverageRating = (ratings) => {
+  const calculateAverageRating = (evaluation) => {
+    // Use overall rating if available, otherwise calculate from competency ratings
+    if (evaluation.overallRating) {
+      return evaluation.overallRating.toFixed(1);
+    }
+    
+    const ratings = evaluation.competencyRatings || evaluation.ratings;
+    if (!ratings || Object.keys(ratings).length === 0) return 'N/A';
+    
+    const values = Object.values(ratings);
+    const average = values.reduce((sum, rating) => sum + rating, 0) / values.length;
+    return average.toFixed(1);
+  };
+
+  const calculateCompetencyAverage = (evaluation) => {
+    const ratings = evaluation.competencyRatings || evaluation.ratings;
     if (!ratings || Object.keys(ratings).length === 0) return 'N/A';
     
     const values = Object.values(ratings);
@@ -76,6 +99,65 @@ const EvaluationsTable = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleViewDetails = (evaluation) => {
+    // TODO: Implement view details modal or navigation
+    console.log('View details for evaluation:', evaluation.id);
+  };
+
+  const handleReview = (evaluation) => {
+    setSelectedEvaluation(evaluation);
+    setIsReviewModalOpen(true);
+  };
+
+  const handleCloseReviewModal = () => {
+    setIsReviewModalOpen(false);
+    setSelectedEvaluation(null);
+  };
+
+  // Delete evaluation mutation
+  const deleteEvaluationMutation = useMutation({
+    mutationFn: async (evaluationId) => {
+      const response = await fetch(`http://localhost:8084/api/v1/evaluations/${evaluationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete evaluation');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evaluations'] });
+      toast.success('Evaluation deleted successfully');
+      setDeleteConfirmation({ isOpen: false, evaluationId: null, employeeName: '' });
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to delete evaluation');
+    }
+  });
+
+  const handleDeleteClick = (evaluation) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      evaluationId: evaluation.id,
+      employeeName: evaluation.employeeName || 'Unknown Employee'
+    });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteConfirmation.evaluationId) {
+      deleteEvaluationMutation.mutate(deleteConfirmation.evaluationId);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmation({ isOpen: false, evaluationId: null, employeeName: '' });
   };
 
   if (loading || isLoading) {
@@ -152,34 +234,37 @@ const EvaluationsTable = () => {
           <p className="text-gray-500">Submitted evaluations will appear here.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Employee
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Average Rating
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Submitted Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Feedback
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {evaluations.map((evaluation) => (
-                <tr key={evaluation.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="overflow-x-auto border border-gray-300 rounded-lg">
+            <table className="min-w-full divide-y divide-gray-300">
+              <thead className="bg-gray-50">
+                <tr className="divide-x divide-gray-300">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                    Employee
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                    Overall Rating
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                    Competencies
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                    Submitted Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                    Key Achievements
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-300">
+                {evaluations.map((evaluation) => (
+                  <tr key={evaluation.id} className="hover:bg-gray-50 transition-colors divide-x divide-gray-200">
+                  <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
                         <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
@@ -198,32 +283,54 @@ const EvaluationsTable = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                     <div className="flex items-center">
                       <span className="text-2xl font-bold text-secondary mr-2">
-                        {calculateAverageRating(evaluation.ratings)}
+                        {calculateAverageRating(evaluation)}
                       </span>
                       <span className="text-sm text-gray-500">/5.0</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 border-r border-gray-200">
+                    <div className="flex items-center">
+                      <span className="text-lg font-semibold text-gray-900 mr-2">
+                        {calculateCompetencyAverage(evaluation)}
+                      </span>
+                      <span className="text-sm text-gray-500">/5.0</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                     {getStatusBadge(evaluation.status)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-200">
                     {formatDate(evaluation.submittedAt)}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 border-r border-gray-200">
                     <div className="text-sm text-gray-900 max-w-xs truncate">
-                      {evaluation.feedback || 'No feedback provided'}
+                      {evaluation.achievements || evaluation.additionalFeedback || evaluation.feedback || 'No achievements provided'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button className="text-primary hover:text-primary/80 transition-colors">
+                      <button 
+                        onClick={() => handleViewDetails(evaluation)}
+                        className="text-primary hover:text-primary/80 transition-colors"
+                      >
                         View Details
                       </button>
-                      <button className="text-green-600 hover:text-green-500 transition-colors">
-                        Review
+                      <button 
+                        onClick={() => handleReview(evaluation)}
+                        className="text-[#002035] hover:text-[#002035]/80 transition-colors"
+                        disabled={evaluation.status === 'REVIEWED'}
+                      >
+                        {evaluation.status === 'REVIEWED' ? 'Reviewed' : 'Review'}
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteClick(evaluation)}
+                        className="text-[#002035] hover:text-[#002035]/80 transition-colors flex items-center"
+                        title="Delete evaluation"
+                      >
+                        <TrashIcon className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -231,6 +338,57 @@ const EvaluationsTable = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Review Modal */}
+      <ReviewModal
+        evaluation={selectedEvaluation}
+        isOpen={isReviewModalOpen}
+        onClose={handleCloseReviewModal}
+      />
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <TrashIcon className="h-6 w-6 text-[#002035]" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Delete Evaluation
+                </h3>
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm text-gray-500">
+                Are you sure you want to delete the evaluation for{' '}
+                <span className="font-medium text-gray-900">{deleteConfirmation.employeeName}</span>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                onClick={handleDeleteCancel}
+                disabled={deleteEvaluationMutation.isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50"
+                style={{backgroundColor: '#002035'}}
+                onClick={handleDeleteConfirm}
+                disabled={deleteEvaluationMutation.isLoading}
+              >
+                {deleteEvaluationMutation.isLoading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

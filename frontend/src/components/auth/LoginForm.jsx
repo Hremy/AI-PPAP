@@ -51,8 +51,16 @@ export default function LoginForm() {
       // Use AuthContext login method
       login(data.token);
 
-      // Route to dashboard - the RoleDashboard component will handle role-based routing
-      navigate('/dashboard');
+      // Route based on role - employees go to dashboard, managers to manager dashboard, admins to admin dashboard
+      if (normalizedRole === 'ROLE_EMPLOYEE') {
+        navigate('/dashboard');
+      } else if (normalizedRole === 'ROLE_MANAGER') {
+        navigate('/manager/dashboard');
+      } else if (normalizedRole === 'ROLE_ADMIN') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/dashboard'); // fallback
+      }
     },
     onError: (error) => {
       setErrors({
@@ -98,7 +106,7 @@ export default function LoginForm() {
                 <span className="text-secondary font-bold text-sm">AI</span>
               </div>
               <span className="text-xl font-bold text-secondary">
-                AI-PPAP
+                AI-PPPA
               </span>
             </Link>
             <Link 
@@ -124,7 +132,7 @@ export default function LoginForm() {
               Welcome back
             </h2>
             <p className="mt-2 text-secondary/70">
-              Sign in to your AI-PPAP account
+              Sign in to your AI-PPPA account
             </p>
           </div>
 

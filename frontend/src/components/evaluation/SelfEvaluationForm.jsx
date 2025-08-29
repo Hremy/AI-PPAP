@@ -1,13 +1,39 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { submitEvaluation } from '../../lib/api';
+import { submitEvaluation, getMyProjects } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  ChatBubbleLeftRightIcon,
+  UsersIcon,
+  PuzzlePieceIcon,
+  RocketLaunchIcon,
+  SparklesIcon,
+  ArrowsRightLeftIcon,
+  PencilSquareIcon
+} from '@heroicons/react/24/outline';
 
 const SelfEvaluationForm = () => {
   const queryClient = useQueryClient();
+  const { currentUser } = useAuth();
   const [ratings, setRatings] = useState({});
   const [feedback, setFeedback] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  // Projects state
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const { data: myProjects = [], isLoading: myProjectsLoading } = useQuery({
+    queryKey: ['my-projects', currentUser?.email || currentUser?.username],
+    queryFn: async () => {
+      if (!currentUser) return [];
+      return await getMyProjects({ identifier: currentUser.email || currentUser.username });
+    },
+    enabled: !!currentUser,
+  });
+  useEffect(() => {
+    if (Array.isArray(myProjects) && myProjects.length === 1) {
+      setSelectedProjectId(String(myProjects[0].id));
+    }
+  }, [myProjects]);
 
   // Enhanced competencies with better descriptions and categories
   const competencies = [
@@ -15,42 +41,42 @@ const SelfEvaluationForm = () => {
       id: 'communication', 
       name: 'Communication', 
       description: 'Effectively communicates ideas, listens actively, and provides clear feedback',
-      icon: '💬',
+      icon: ChatBubbleLeftRightIcon,
       category: 'Interpersonal'
     },
     { 
       id: 'teamwork', 
       name: 'Collaboration & Teamwork', 
       description: 'Works well with others, supports team goals, and contributes to a positive environment',
-      icon: '🤝',
+      icon: UsersIcon,
       category: 'Interpersonal'
     },
     { 
       id: 'problem_solving', 
       name: 'Problem Solving', 
       description: 'Identifies issues quickly, thinks critically, and develops effective solutions',
-      icon: '🧩',
+      icon: PuzzlePieceIcon,
       category: 'Technical'
     },
     { 
       id: 'initiative', 
       name: 'Initiative & Leadership', 
       description: 'Takes ownership, shows self-motivation, and leads by example',
-      icon: '🚀',
+      icon: RocketLaunchIcon,
       category: 'Leadership'
     },
     { 
       id: 'quality', 
       name: 'Quality & Excellence', 
       description: 'Consistently delivers high-quality work that exceeds expectations',
-      icon: '⭐',
+      icon: SparklesIcon,
       category: 'Performance'
     },
     { 
       id: 'adaptability', 
       name: 'Adaptability', 
       description: 'Embraces change, learns quickly, and thrives in dynamic environments',
-      icon: '🔄',
+      icon: ArrowsRightLeftIcon,
       category: 'Growth'
     }
   ];
@@ -69,29 +95,17 @@ const SelfEvaluationForm = () => {
       const evaluationData = {
         ratings,
         feedback,
-        submittedAt: new Date().toISOString()
+        submittedAt: new Date().toISOString(),
+        projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
       };
       
       console.log('Submitting evaluation:', evaluationData);
       
-      // Submit to backend API
-      const response = await fetch('http://localhost:8084/api/evaluations/self', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(evaluationData)
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Evaluation submitted successfully:', result);
-        setSubmitted(true);
-        queryClient.invalidateQueries(['evaluations']);
-      } else {
-        console.error('Failed to submit evaluation:', response.statusText);
-        // You could add error handling here
-      }
+      // Submit to backend API via axios instance (adds dev headers)
+      const result = await submitEvaluation(evaluationData);
+      console.log('Evaluation submitted successfully:', result);
+      setSubmitted(true);
+      queryClient.invalidateQueries(['evaluations']);
     } catch (error) {
       console.error('Error submitting evaluation:', error);
       // You could add error handling here
@@ -161,6 +175,27 @@ const SelfEvaluationForm = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 sm:p-8">
+        {/* Project Selection */}
+        <div className="bg-white border-2 rounded-2xl p-6 mb-8">
+          <h3 className="text-xl font-semibold text-secondary mb-3">Project</h3>
+          <p className="text-secondary/70 text-sm mb-4">Select the project this self-evaluation is for.</p>
+          <div className="max-w-md">
+            <select
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors bg-white"
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              disabled={myProjectsLoading}
+            >
+              <option value="">{myProjectsLoading ? 'Loading your projects...' : 'Select a project (optional)'}</option>
+              {Array.isArray(myProjects) && myProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {Array.isArray(myProjects) && myProjects.length > 0 && !selectedProjectId && (
+              <p className="text-xs text-secondary/60 mt-2">Tip: Choose a project to tie this evaluation to a specific context.</p>
+            )}
+          </div>
+        </div>
         {/* Competencies Grid */}
         <div className="grid gap-8 mb-12">
           {competencies.map((competency, index) => {
@@ -177,7 +212,7 @@ const SelfEvaluationForm = () => {
                 {/* Competency Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <div className="text-2xl">{competency.icon}</div>
+                    {(() => { const Icon = competency.icon; return <Icon className="w-6 h-6 text-secondary" />; })()}
                     <div>
                       <h3 className="text-xl font-semibold text-secondary flex items-center gap-2">
                         {competency.name}
@@ -238,7 +273,7 @@ const SelfEvaluationForm = () => {
         {/* Additional Feedback Section */}
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 mb-8">
           <h3 className="text-xl font-semibold text-secondary mb-3 flex items-center gap-2">
-            <span>📝</span>
+            <PencilSquareIcon className="w-5 h-5" />
             Additional Insights & Feedback
           </h3>
           <p className="text-secondary/70 text-sm mb-4">

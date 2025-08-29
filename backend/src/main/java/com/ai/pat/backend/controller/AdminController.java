@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.security.SecureRandom;
 import java.util.*;
+import com.ai.pat.backend.controller.dto.CreateManagerRequest;
 
 @RestController
 @RequestMapping({"/api/v1/admin", "/v1/admin"})
@@ -27,6 +28,21 @@ public class AdminController {
             .toList();
             
         return ResponseEntity.ok(managerList);
+    }
+
+    @GetMapping("/admins")
+    public ResponseEntity<List<Map<String, Object>>> listAdmins() {
+        List<User> admins = userRepository.findByRolesContaining("ROLE_ADMIN");
+
+        List<Map<String, Object>> adminList = admins.stream()
+            .map(u -> {
+                Map<String, Object> m = convertToManagerResponse(u);
+                m.put("role", "ROLE_ADMIN");
+                return m;
+            })
+            .toList();
+
+        return ResponseEntity.ok(adminList);
     }
 
     @PostMapping("/managers")
@@ -176,5 +192,4 @@ public class AdminController {
         return email.substring(0, email.indexOf('@')).toLowerCase();
     }
 
-    public record CreateManagerRequest(String firstName, String lastName, String email) {}
 }
