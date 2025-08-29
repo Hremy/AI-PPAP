@@ -168,52 +168,74 @@ export default function UserRoles() {
             </form>
           </div>
 
-          {/* Generated Password Display */}
+          {/* Generated Password Modal */}
           {generatedPassword && (
-            <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-green-800 mb-2">Manager Created Successfully!</h3>
-                  <p className="text-green-700 text-sm">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+                {/* Modal Header */}
+                <div className="bg-primary px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-secondary">Manager Created Successfully!</h3>
+                    <button
+                      onClick={dismissPassword}
+                      className="text-secondary/70 hover:text-secondary transition-colors"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-secondary/80 text-sm mt-2">
                     A random password has been generated for the new manager. Please share this password securely.
                   </p>
                 </div>
-                <button
-                  onClick={dismissPassword}
-                  className="text-green-600 hover:text-green-800 text-sm font-medium"
-                >
-                  ✕
-                </button>
-              </div>
-              
-              <div className="bg-white border border-green-300 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="block text-sm font-medium text-green-800 mb-1">Generated Password</label>
-                    <code className="text-lg font-mono text-green-900 bg-green-100 px-3 py-2 rounded border">
-                      {generatedPassword}
-                    </code>
+                
+                {/* Modal Body */}
+                <div className="p-6">
+                  <div className="bg-background border border-primary/20 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-secondary mb-2">Generated Password</label>
+                        <code className="text-lg font-mono text-secondary bg-white px-4 py-3 rounded-lg border border-primary/20 block w-full">
+                          {generatedPassword}
+                        </code>
+                      </div>
+                      <button
+                        onClick={copyPassword}
+                        className="ml-4 flex items-center space-x-2 px-4 py-3 bg-primary text-secondary rounded-lg hover:bg-primary/90 transition-colors shadow-md"
+                      >
+                        {passwordCopied ? (
+                          <>
+                            <CheckIcon className="w-5 h-5" />
+                            <span className="font-medium">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <ClipboardDocumentIcon className="w-5 h-5" />
+                            <span className="font-medium">Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <p className="text-sm text-orange-800 flex items-center">
+                        <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Make sure to save this password securely. It won't be shown again.
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    onClick={copyPassword}
-                    className="ml-4 flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    {passwordCopied ? (
-                      <>
-                        <CheckIcon className="w-4 h-4" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <ClipboardDocumentIcon className="w-4 h-4" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
+                  
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      onClick={dismissPassword}
+                      className="px-6 py-2 bg-secondary text-white rounded-lg hover:bg-secondary/90 transition-colors font-medium"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-green-600 mt-2">
-                  ⚠️ Make sure to save this password securely. It won't be shown again.
-                </p>
               </div>
             </div>
           )}

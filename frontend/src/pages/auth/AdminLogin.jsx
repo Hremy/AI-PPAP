@@ -26,7 +26,7 @@ export default function AdminLogin() {
       }
 
       // Persist and route to admin dashboard
-      localStorage.setItem('token', token);
+      localStorage.setItem('ai_ppap_auth_token', token);
       localStorage.setItem('user', JSON.stringify({ email: data.email, role: normalizedRole }));
       navigate('/admin/dashboard');
     },
@@ -68,7 +68,7 @@ export default function AdminLogin() {
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-md">
                 <span className="text-secondary font-bold text-sm">AI</span>
               </div>
-              <span className="text-xl font-bold text-secondary">AI-PPAP</span>
+              <span className="text-xl font-bold text-secondary">AI-PPPA</span>
             </Link>
             <Link to="/login" className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors">
               Employee/Manager login
@@ -103,7 +103,7 @@ export default function AdminLogin() {
                     value={formData.email}
                     onChange={handleChange}
                     className={`appearance-none relative block w-full px-4 py-3 border rounded-xl placeholder-secondary/40 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 ${errors.email ? 'border-error focus:ring-error focus:border-error' : 'border-secondary/30'}`}
-                    placeholder="admin@ai-ppap.com"
+                    placeholder="admin@ai-pppa.com"
                   />
                   {errors.email && <p className="mt-2 text-sm text-error">{errors.email}</p>}
                 </div>

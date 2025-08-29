@@ -14,7 +14,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('ai_ppap_auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -35,7 +35,7 @@ api.interceptors.response.use(
     await sleep(400);
     if (error.response?.status === 401) {
       // Clear invalid token and redirect to login
-      localStorage.removeItem('token');
+      localStorage.removeItem('ai_ppap_auth_token');
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
@@ -61,7 +61,7 @@ export const logoutUser = async () => {
   } catch (_) {
     // Even if server is unreachable, proceed with client-side cleanup
   } finally {
-    localStorage.removeItem('token');
+    localStorage.removeItem('ai_ppap_auth_token');
     localStorage.removeItem('user');
   }
 };
@@ -127,7 +127,7 @@ export const getCurrentUser = () => {
 };
 
 export const isAuthenticated = () => {
-  return !!localStorage.getItem('token');
+  return !!localStorage.getItem('ai_ppap_auth_token');
 };
 
 // Self-evaluation
@@ -168,8 +168,20 @@ export const getManagers = async () => {
   return res.data;
 };
 
+// Admin: admins list
+export const getAdmins = async () => {
+  const res = await api.get('/v1/admin/admins');
+  return res.data;
+};
+
 export const createManager = async (manager) => {
   const res = await api.post('/v1/admin/managers', manager);
+  return res.data;
+};
+
+// Manager dashboard
+export const getManagerDashboard = async () => {
+  const res = await api.get('/v1/manager/dashboard');
   return res.data;
 };
 

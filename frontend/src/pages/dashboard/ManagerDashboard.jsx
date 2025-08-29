@@ -10,7 +10,8 @@ import {
   StarIcon,
   ArrowTrendingUpIcon,
   EyeIcon,
-  PlusIcon
+  PlusIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 
 const ManagerDashboard = () => {
@@ -65,14 +66,14 @@ const ManagerDashboard = () => {
       title: 'Pending Reviews',
       value: managerData.pendingReviews,
       icon: ClockIcon,
-      color: 'text-error',
-      bgColor: 'bg-error/10'
+      color: 'text-white',
+      bgColor: 'bg-[#002035]'
     }
   ];
 
   const getPerformanceColor = (status) => {
     switch (status) {
-      case 'excellent': return 'text-green-600 bg-green-50';
+      case 'excellent': return 'text-white bg-[#002035]';
       case 'good': return 'text-primary bg-primary/10';
       case 'needs-improvement': return 'text-orange-600 bg-orange-50';
       default: return 'text-secondary/70 bg-secondary/10';
@@ -81,7 +82,7 @@ const ManagerDashboard = () => {
 
   const getPriorityColor = (priority) => {
     switch (priority) {
-      case 'high': return 'text-error bg-error/10';
+      case 'high': return 'text-white bg-[#002035]';
       case 'medium': return 'text-orange-600 bg-orange-50';
       case 'low': return 'text-primary bg-primary/10';
       default: return 'text-secondary/70 bg-secondary/10';
@@ -94,9 +95,18 @@ const ManagerDashboard = () => {
       <div className="bg-white shadow-sm border-b border-primary/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-2xl font-bold text-secondary">Manager Dashboard</h1>
-              <p className="text-secondary/70">{managerData.name} • {managerData.role} • {managerData.team}</p>
+            <div className="flex items-center space-x-4">
+              <Link 
+                to="/" 
+                className="flex items-center space-x-2 text-secondary/70 hover:text-secondary transition-colors bg-white/50 px-3 py-2 rounded-lg hover:bg-white/80"
+              >
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Return</span>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-secondary">Manager Dashboard</h1>
+                <p className="text-secondary/70">{managerData.name} • {managerData.role} • {managerData.team}</p>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
               <Link 

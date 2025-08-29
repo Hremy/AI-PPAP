@@ -1,9 +1,16 @@
 import axios from 'axios';
 
-const API_URL = '/api/evaluations';
+const LS_KEY = 'ai_ppap_api_base_url';
+const resolveBase = () => {
+  const ls = (typeof localStorage !== 'undefined' && localStorage.getItem(LS_KEY)) || null;
+  const env = import.meta?.env?.VITE_API_BASE_URL || null;
+  const base = (ls || env || 'http://localhost:8084').replace(/\/$/, '');
+  return base;
+};
+const apiUrl = () => `${resolveBase()}/api/v1/evaluations`;
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('ai_ppap_auth_token');
   return {
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -14,7 +21,7 @@ const getAuthHeaders = () => {
 
 export const submitEvaluation = async (evaluationData) => {
   try {
-    const response = await axios.post(API_URL, evaluationData, getAuthHeaders());
+    const response = await axios.post(apiUrl(), evaluationData, getAuthHeaders());
     return response.data;
   } catch (error) {
     console.error('Error submitting evaluation:', error);
@@ -24,7 +31,7 @@ export const submitEvaluation = async (evaluationData) => {
 
 export const getEmployeeEvaluations = async (employeeId) => {
   try {
-    const response = await axios.get(`${API_URL}/employee/${employeeId}`, getAuthHeaders());
+    const response = await axios.get(`${apiUrl()}/employee/${employeeId}`, getAuthHeaders());
     return response.data;
   } catch (error) {
     console.error('Error fetching employee evaluations:', error);
@@ -34,7 +41,7 @@ export const getEmployeeEvaluations = async (employeeId) => {
 
 export const getAssignedEvaluations = async (reviewerId) => {
   try {
-    const response = await axios.get(`${API_URL}/reviewer/${reviewerId}`, getAuthHeaders());
+    const response = await axios.get(`${apiUrl()}/reviewer/${reviewerId}`, getAuthHeaders());
     return response.data;
   } catch (error) {
     console.error('Error fetching assigned evaluations:', error);
@@ -44,7 +51,7 @@ export const getAssignedEvaluations = async (reviewerId) => {
 
 export const getDepartmentEvaluations = async (department) => {
   try {
-    const response = await axios.get(`${API_URL}/department/${department}`, getAuthHeaders());
+    const response = await axios.get(`${apiUrl()}/department/${department}`, getAuthHeaders());
     return response.data;
   } catch (error) {
     console.error('Error fetching department evaluations:', error);
@@ -55,7 +62,7 @@ export const getDepartmentEvaluations = async (department) => {
 export const updateEvaluationStatus = async (evaluationId, status) => {
   try {
     const response = await axios.put(
-      `${API_URL}/${evaluationId}/status?status=${status}`,
+      `${apiUrl()}/${evaluationId}/status?status=${status}`,
       {},
       getAuthHeaders()
     );
@@ -68,7 +75,7 @@ export const updateEvaluationStatus = async (evaluationId, status) => {
 
 export const deleteEvaluation = async (evaluationId) => {
   try {
-    await axios.delete(`${API_URL}/${evaluationId}`, getAuthHeaders());
+    await axios.delete(`${apiUrl()}/${evaluationId}`, getAuthHeaders());
   } catch (error) {
     console.error('Error deleting evaluation:', error);
     throw error;
@@ -78,7 +85,7 @@ export const deleteEvaluation = async (evaluationId) => {
 export const getEmployeeAverageRatings = async (employeeId) => {
   try {
     const response = await axios.get(
-      `${API_URL}/employee/${employeeId}/averages`,
+      `${apiUrl()}/employee/${employeeId}/averages`,
       getAuthHeaders()
     );
     return response.data;

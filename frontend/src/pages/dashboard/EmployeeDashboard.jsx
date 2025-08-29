@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { getEmployeeEvaluations, getEmployeeAverageRatings } from '../../services/evaluationService';
 import { 
   ChartBarIcon, 
   DocumentTextIcon, 
@@ -7,52 +9,92 @@ import {
   UserIcon,
   ArrowTrendingUpIcon,
   ClockIcon,
-  StarIcon
+  StarIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 
 const EmployeeDashboard = () => {
-  // Mock data - will be replaced with real API calls
-  const userData = {
-    name: 'John Doe',
-    role: 'Software Engineer',
-    team: 'Development Team',
-    performanceScore: 85,
-    recentReviews: 3,
-    pendingActions: 2,
-    goals: 5
-  };
+  const { currentUser, loading: authLoading } = useAuth();
 
-  const recentActivities = [
-    { id: 1, type: 'review', title: 'Self-review submitted', date: '2 days ago', status: 'completed' },
-    { id: 2, type: 'goal', title: 'Q1 Goals updated', date: '1 week ago', status: 'completed' },
-    { id: 3, type: 'feedback', title: 'Peer review received', date: '2 weeks ago', status: 'new' }
-  ];
+  const [evaluations, setEvaluations] = useState([]);
+  const [avgRatings, setAvgRatings] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!currentUser) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const [evals, averages] = await Promise.all([
+          getEmployeeEvaluations(currentUser.id),
+          getEmployeeAverageRatings(currentUser.id)
+        ]);
+        setEvaluations(Array.isArray(evals) ? evals : []);
+        setAvgRatings(averages || {});
+      } catch (e) {
+        console.error('Failed to load employee dashboard data', e);
+        setError('Failed to load your dashboard data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (!authLoading) {
+      load();
+    }
+  }, [authLoading, currentUser]);
+
+  const computed = useMemo(() => {
+    const total = evaluations.length;
+    const completed = evaluations.filter(e => e.status === 'REVIEWED').length;
+    const pending = evaluations.filter(e => e.status === 'SUBMITTED').length;
+    const overallAvg = (() => {
+      const values = Object.values(avgRatings || {});
+      if (!values.length) return 0;
+      const sum = values.reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
+      return +(sum / values.length).toFixed(1);
+    })();
+    return { total, completed, pending, overallAvg };
+  }, [evaluations, avgRatings]);
+
+  const userData = useMemo(() => ({
+    name: currentUser ? (currentUser.firstName ? `${currentUser.firstName}${currentUser.lastName ? ' ' + currentUser.lastName : ''}` : currentUser.username || 'User') : 'User',
+    role: currentUser?.position || 'Employee',
+    team: currentUser?.department || '—',
+    performanceScore: computed.overallAvg,
+    recentReviews: computed.completed,
+    pendingActions: computed.pending,
+    goals: 0
+  }), [currentUser, computed]);
+
+  const recentActivities = [];
 
   const quickStats = [
     {
-      title: 'Performance Score',
+      title: 'Overall Average',
       value: userData.performanceScore,
-      suffix: '%',
+      suffix: '',
       icon: ChartBarIcon,
       color: 'text-primary',
       bgColor: 'bg-primary/10'
     },
     {
-      title: 'Recent Reviews',
+      title: 'Completed Reviews',
       value: userData.recentReviews,
       icon: DocumentTextIcon,
       color: 'text-primary',
       bgColor: 'bg-primary/10'
     },
     {
-      title: 'Active Goals',
-      value: userData.goals,
+      title: 'Total Evaluations',
+      value: computed.total,
       icon: TrophyIcon,
       color: 'text-primary',
       bgColor: 'bg-primary/10'
     },
     {
-      title: 'Pending Actions',
+      title: 'Pending Reviews',
       value: userData.pendingActions,
       icon: ClockIcon,
       color: 'text-error',
@@ -91,15 +133,32 @@ const EmployeeDashboard = () => {
     }
   ];
 
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-secondary/70">
+        Loading your dashboard...
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-primary/20">
+      <div className="bg-white/90 backdrop-blur-md border-b border-primary/20 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-2xl font-bold text-secondary">Welcome back, {userData.name}!</h1>
-              <p className="text-secondary/70">{userData.role} • {userData.team}</p>
+            <div className="flex items-center space-x-4">
+              <Link 
+                to="/" 
+                className="flex items-center space-x-2 text-secondary/70 hover:text-secondary transition-colors bg-white/50 px-3 py-2 rounded-lg hover:bg-white/80"
+              >
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Return</span>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-secondary">Welcome back, {userData.name}!</h1>
+                <p className="text-secondary/70">{userData.role} • {userData.team}</p>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
               <Link 
@@ -109,12 +168,23 @@ const EmployeeDashboard = () => {
                 <UserIcon className="w-5 h-5" />
                 <span>Profile</span>
               </Link>
+              <Link 
+                to="/logout" 
+                className="flex items-center space-x-2 text-secondary/70 hover:text-secondary transition-colors"
+              >
+                <span>Logout</span>
+              </Link>
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-6 p-4 rounded-lg border border-error/20 bg-error/5 text-error">
+            {error}
+          </div>
+        )}
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {quickStats.map((stat, index) => (
@@ -211,7 +281,7 @@ const EmployeeDashboard = () => {
                   <StarIcon className="w-8 h-8 text-primary" />
                 </div>
                 <h3 className="font-semibold text-secondary mb-2">Overall Rating</h3>
-                <p className="text-2xl font-bold text-primary">{userData.performanceScore}%</p>
+                <p className="text-2xl font-bold text-primary">{userData.performanceScore}</p>
                 <p className="text-sm text-secondary/70">Excellent Performance</p>
               </div>
               
@@ -220,7 +290,7 @@ const EmployeeDashboard = () => {
                   <ArrowTrendingUpIcon className="w-8 h-8 text-primary" />
                 </div>
                 <h3 className="font-semibold text-secondary mb-2">Growth Trend</h3>
-                <p className="text-2xl font-bold text-primary">+12%</p>
+                <p className="text-2xl font-bold text-primary">—</p>
                 <p className="text-sm text-secondary/70">vs Last Quarter</p>
               </div>
               

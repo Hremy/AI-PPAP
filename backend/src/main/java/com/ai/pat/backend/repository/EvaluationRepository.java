@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
@@ -30,4 +31,7 @@ public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
     
     @Query("SELECT e FROM Evaluation e WHERE e.employee.department = :department")
     List<Evaluation> findByDepartment(@Param("department") String department);
+    
+    @Query("SELECT DISTINCT e FROM Evaluation e LEFT JOIN FETCH e.managerCompetencyRatings WHERE e.id = :id")
+    Optional<Evaluation> findByIdWithManagerCompetencyRatings(@Param("id") Long id);
 }

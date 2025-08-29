@@ -106,7 +106,7 @@ const Register = () => {
                 <span className="text-secondary font-bold text-sm">AI</span>
               </div>
               <span className="text-xl font-bold text-secondary">
-                AI-PPAP
+                AI-PPPA
               </span>
             </Link>
             <Link 
@@ -132,7 +132,7 @@ const Register = () => {
               Create your account
             </h2>
             <p className="mt-2 text-secondary/70">
-              Join AI-PPAP and transform your performance management
+              Join AI-PPPA and transform your performance management
             </p>
           </div>
 

@@ -16,16 +16,27 @@ import Logout from './components/auth/Logout';
 // New Pages
 import Register from './pages/auth/Register';
 import EmployeeDashboard from './pages/dashboard/EmployeeDashboard';
-import ManagerDashboard from './pages/dashboard/ManagerDashboard';
+import EmployeeSpecificDashboard from './pages/dashboard/EmployeeSpecificDashboard';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
 import AdminLayout from './pages/admin/AdminLayout';
 import UserRoles from './pages/admin/UserRoles';
 import EvaluationsPage from './pages/admin/EvaluationsPage';
+import AdminProfile from './pages/admin/AdminProfile';
+import Settings from './pages/admin/Settings';
+import ManagerEvaluationsPage from './pages/manager/EvaluationsPage';
+import ManagerLayout from './pages/manager/ManagerLayout';
+import ManagerDashboard from './pages/manager/ManagerDashboard';
+import ManagerProfile from './pages/manager/ManagerProfile';
+import ManagerAnalytics from './pages/manager/ManagerAnalytics';
 import Features from './pages/public/Features';
 import EvaluationPage from './pages/EvaluationPage';
 import Profile from './pages/profile/Profile';
 import AdminLogin from './pages/auth/AdminLogin';
-import RoleDashboard from './components/dashboard/RoleDashboard';
+import RoleBasedRedirect from './components/dashboard/RoleBasedRedirect';
+import DashboardRouter from './components/dashboard/DashboardRouter';
+import ErrorBoundary from './components/ErrorBoundary';
+import RoleBasedRouteGuard from './components/auth/RoleBasedRouteGuard';
+
 
 import './index.css';
 
@@ -42,15 +53,17 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
-          <div className="App">
-            <Toaster position="top-right" />
-          <Routes>
+          <ErrorBoundary>
+            <RoleBasedRouteGuard>
+              <div className="App">
+                <Toaster position="top-right" />
+            <Routes>
             {/* Public routes */}
             <Route path="/" element={<HomePage />} />
             <Route path="/pricing" element={<div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Pricing Page</h1><p className="text-secondary/70">Coming Soon...</p></div></div>} />
-            <Route path="/about" element={<div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">About Page</h1><p className="text-secondary/70">Coming Soon...</p></div></div>} />
+
             
             {/* Protected routes */}
             <Route path="/evaluation" element={
@@ -70,29 +83,29 @@ function App() {
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
             
-            {/* Protected routes - Role-based dashboards */}
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <RoleDashboard />
-                </ProtectedRoute>
-              } 
-            />
+                                        {/* Protected routes - Role-based dashboards */}
+                            <Route
+                              path="/dashboard"
+                              element={
+                                <ProtectedRoute>
+                                  <DashboardRouter />
+                                </ProtectedRoute>
+                              }
+                            />
             
             {/* Specific role-based dashboard routes */}
             <Route 
               path="/employee/dashboard" 
               element={
                 <ProtectedRoute requiredRole="EMPLOYEE">
-                  <EmployeeDashboard />
+                  <EmployeeSpecificDashboard />
                 </ProtectedRoute>
               } 
             />
             <Route 
               path="/manager/dashboard" 
               element={
-                <ProtectedRoute requiredRole="MANAGER">
+                <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
                   <ManagerDashboard />
                 </ProtectedRoute>
               } 
@@ -103,6 +116,16 @@ function App() {
                 <ProtectedRoute requiredRole="ADMIN">
                   <AdminLayout>
                     <AdminDashboard />
+                  </AdminLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/settings" 
+              element={
+                <ProtectedRoute requiredRole="ADMIN">
+                  <AdminLayout>
+                    <Settings />
                   </AdminLayout>
                 </ProtectedRoute>
               } 
@@ -127,14 +150,63 @@ function App() {
                 </ProtectedRoute>
               } 
             />
+                                        <Route
+                              path="/admin/evaluations"
+                              element={
+                                <ProtectedRoute requiredRole="ADMIN">
+                                  <EvaluationsPage />
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/admin/profile"
+                              element={
+                                <ProtectedRoute requiredRole="ADMIN">
+                                  <AdminProfile />
+                                </ProtectedRoute>
+                              }
+                            />
             <Route 
-              path="/admin/evaluations" 
+              path="/manager/evaluations" 
               element={
-                <ProtectedRoute requiredRoles={['ADMIN', 'MANAGER']}>
-                  <EvaluationsPage />
+                <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
+                  <ManagerEvaluationsPage />
                 </ProtectedRoute>
               } 
             />
+            <Route 
+              path="/manager/analytics" 
+              element={
+                <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
+                  <ManagerLayout>
+                    <ManagerAnalytics />
+                  </ManagerLayout>
+                </ProtectedRoute>
+              } 
+            />
+                                        <Route
+                              path="/manager/team"
+                              element={
+                                <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
+                                  <ManagerLayout>
+                                    <div className="flex items-center justify-center h-96">
+                                      <div className="text-center">
+                                        <h1 className="text-2xl font-bold text-gray-900 mb-4">Team Management</h1>
+                                        <p className="text-gray-500">Coming Soon...</p>
+                                      </div>
+                                    </div>
+                                  </ManagerLayout>
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/manager/profile"
+                              element={
+                                <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
+                                  <ManagerProfile />
+                                </ProtectedRoute>
+                              }
+                            />
             
             {/* Placeholder routes for future pages */}
             <Route path="/reviews/self" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Self Review</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
@@ -146,7 +218,9 @@ function App() {
             {/* Default redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          </div>
+              </div>
+            </RoleBasedRouteGuard>
+          </ErrorBoundary>
         </AuthProvider>
       </Router>
       <ReactQueryDevtools initialIsOpen={false} />

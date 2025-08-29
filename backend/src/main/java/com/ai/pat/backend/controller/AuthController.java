@@ -63,9 +63,11 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Map<String, Object>> logout() {
+        // In a real application, you would invalidate the JWT token here
+        // For this mock implementation, we'll just return a success response
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Logged out"
+                "message", "Logged out successfully"
         ));
     }
 
@@ -97,21 +99,26 @@ public class AuthController {
     private String createMockJwtToken(String email, String role) {
         // In a real application, this would be a proper JWT token
         // For development, we'll create a base64 encoded JSON string
+        // Generate a mock numeric ID based on email hash
+        Long userId = Math.abs((long) email.hashCode()) % 1000000L + 1L;
+        
         String payload = String.format("""
             {
-                "sub": "%s",
+                "sub": "%d",
                 "email": "%s",
                 "roles": ["%s"],
                 "username": "%s",
                 "firstName": "John",
                 "lastName": "Doe",
+                "userId": %d,
                 "exp": %d
             }
             """, 
-            extractUsernameFromEmail(email),
+            userId,
             email,
             role,
             extractUsernameFromEmail(email),
+            userId,
             System.currentTimeMillis() / 1000 + 3600 // 1 hour expiry
         );
         

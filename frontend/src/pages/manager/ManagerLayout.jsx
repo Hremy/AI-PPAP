@@ -1,27 +1,25 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import {
-  Squares2X2Icon,
-  UsersIcon,
-  DocumentTextIcon,
-  Cog6ToothIcon,
-  ArrowLeftIcon,
+import { 
+  HomeIcon, 
+  ChartBarIcon, 
+  DocumentTextIcon, 
   UserIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 
-const navigation = [
-  { name: 'Dashboard', href: '/admin/dashboard', icon: Squares2X2Icon },
-  { name: 'Evaluations', href: '/admin/evaluations', icon: DocumentTextIcon },
-  { name: 'User Roles', href: '/admin/user-roles', icon: UsersIcon },
-  { name: 'Profile', href: '/admin/profile', icon: UserIcon },
-  { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
-];
-
-export default function AdminLayout({ children }) {
+const ManagerLayout = ({ children }) => {
   const { currentUser, logout } = useAuth();
   const location = useLocation();
   const orgName = (typeof localStorage !== 'undefined' && localStorage.getItem('ai_ppap_org_name')) || 'AI-PPPA';
+
+  const navigation = [
+    { name: 'Dashboard', href: '/manager/dashboard', icon: HomeIcon },
+    { name: 'Evaluations', href: '/manager/evaluations', icon: DocumentTextIcon },
+    { name: 'Analytics', href: '/manager/analytics', icon: ChartBarIcon },
+    { name: 'Profile', href: '/manager/profile', icon: UserIcon },
+  ];
 
   const isActive = (href) => location.pathname === href;
 
@@ -88,7 +86,7 @@ export default function AdminLayout({ children }) {
                 <p className="text-sm font-semibold text-white">
                   {currentUser?.firstName} {currentUser?.lastName}
                 </p>
-                <p className="text-xs text-white/70">Admin</p>
+                <p className="text-xs text-white/70">Manager</p>
               </div>
             </div>
             <div className="mt-4 space-y-2">
@@ -113,4 +111,6 @@ export default function AdminLayout({ children }) {
       </div>
     </div>
   );
-}
+};
+
+export default ManagerLayout;
