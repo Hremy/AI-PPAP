@@ -82,7 +82,7 @@ export default function EmailVerification() {
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="text-center">
-              <h3 className="text-sm font-medium text-gray-900 mb-2">Welcome to AI-PPAP!</h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Welcome to AI-PPPA!</h3>
               <p className="text-sm text-gray-500">
                 Your account is now active and ready to use. You can start managing your PPAP documents.
               </p>

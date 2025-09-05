@@ -14,9 +14,21 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('ai_ppap_auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Add dev auth headers for backend's DevHeaderAuthFilter so method security works in dev
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        const roles = (u?.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',');
+        if (u?.username || u?.email) config.headers['X-User'] = u.username || u.email;
+        if (roles) config.headers['X-Roles'] = roles;
+      }
+    } catch (_) {
+      // ignore parsing issues; headers just won't be added
     }
     return config;
   },
@@ -35,7 +47,7 @@ api.interceptors.response.use(
     await sleep(400);
     if (error.response?.status === 401) {
       // Clear invalid token and redirect to login
-      localStorage.removeItem('token');
+      localStorage.removeItem('ai_ppap_auth_token');
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
@@ -61,7 +73,7 @@ export const logoutUser = async () => {
   } catch (_) {
     // Even if server is unreachable, proceed with client-side cleanup
   } finally {
-    localStorage.removeItem('token');
+    localStorage.removeItem('ai_ppap_auth_token');
     localStorage.removeItem('user');
   }
 };
@@ -127,7 +139,7 @@ export const getCurrentUser = () => {
 };
 
 export const isAuthenticated = () => {
-  return !!localStorage.getItem('token');
+  return !!localStorage.getItem('ai_ppap_auth_token');
 };
 
 // Self-evaluation
@@ -164,12 +176,67 @@ export const requireAuth = () => {
 
 // Admin: managers
 export const getManagers = async () => {
-  const res = await api.get('/v1/admin/managers');
+  const res = await api.get('/v1/users/managers');
   return res.data;
 };
 
-export const createManager = async (manager) => {
-  const res = await api.post('/v1/admin/managers', manager);
+// Admin: admins list
+export const getAdmins = async () => {
+  const res = await api.get('/v1/admin/admins');
+  return res.data;
+};
+
+export const createManager = async ({ username, email, password, firstName, lastName, department }) => {
+  // Backend expects request params, not JSON body
+  const res = await api.post('/v1/users/managers', null, {
+    params: { username, email, password, firstName, lastName, department },
+  });
+  return res.data;
+};
+
+// Projects
+export const fetchProjects = async () => {
+  const res = await api.get('/v1/projects');
+  return res.data;
+};
+
+export const createProject = async ({ name }) => {
+  const res = await api.post('/v1/projects', { name });
+  return res.data;
+};
+
+export const assignUserProjects = async ({ userId, projectIds }) => {
+  const res = await api.put(`/v1/users/${userId}/projects`, projectIds);
+  return res.data;
+};
+
+export const assignManagedProjects = async ({ userId, projectIds }) => {
+  const res = await api.put(`/v1/users/${userId}/managed-projects`, projectIds);
+  return res.data;
+};
+
+export const assignMyProjects = async ({ identifier, projectIds }) => {
+  // identifier can be username or email; backend resolves either
+  const res = await api.put('/v1/users/me/projects', projectIds, {
+    headers: {
+      'X-User': identifier,
+    },
+  });
+  return res.data;
+};
+
+export const getMyProjects = async ({ identifier }) => {
+  const res = await api.get('/v1/users/me/projects', {
+    headers: {
+      'X-User': identifier,
+    },
+  });
+  return res.data;
+};
+
+// Manager dashboard
+export const getManagerDashboard = async () => {
+  const res = await api.get('/v1/manager/dashboard');
   return res.data;
 };
 

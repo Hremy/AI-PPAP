@@ -1,45 +1,195 @@
 package com.ai.pat.backend.controller;
 
+import com.ai.pat.backend.model.User;
+import com.ai.pat.backend.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.SecureRandom;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
+import com.ai.pat.backend.controller.dto.CreateManagerRequest;
 
 @RestController
 @RequestMapping({"/api/v1/admin", "/v1/admin"})
+@RequiredArgsConstructor
 public class AdminController {
 
-    private static final List<Map<String, Object>> MANAGERS = new ArrayList<>();
-    private static final AtomicLong ID_SEQ = new AtomicLong(1);
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @GetMapping("/managers")
     public ResponseEntity<List<Map<String, Object>>> listManagers() {
-        return ResponseEntity.ok(MANAGERS);
+        List<User> managers = userRepository.findByRolesContaining("ROLE_MANAGER");
+        
+        List<Map<String, Object>> managerList = managers.stream()
+            .map(this::convertToManagerResponse)
+            .toList();
+            
+        return ResponseEntity.ok(managerList);
+    }
+
+    @GetMapping("/admins")
+    public ResponseEntity<List<Map<String, Object>>> listAdmins() {
+        List<User> admins = userRepository.findByRolesContaining("ROLE_ADMIN");
+
+        List<Map<String, Object>> adminList = admins.stream()
+            .map(u -> {
+                Map<String, Object> m = convertToManagerResponse(u);
+                m.put("role", "ROLE_ADMIN");
+                return m;
+            })
+            .toList();
+
+        return ResponseEntity.ok(adminList);
     }
 
     @PostMapping("/managers")
-    public ResponseEntity<Map<String, Object>> createManager(@RequestBody Map<String, Object> body) {
-        String email = String.valueOf(body.getOrDefault("email", ""));
-        String firstName = String.valueOf(body.getOrDefault("firstName", ""));
-        String lastName = String.valueOf(body.getOrDefault("lastName", ""));
-
-        if (email.isBlank() || !email.contains("@")) {
+    public ResponseEntity<Map<String, Object>> createManager(@RequestBody CreateManagerRequest request) {
+        // Validate input
+        if (request.email() == null || request.email().isBlank() || !request.email().contains("@")) {
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
                 "message", "Valid email is required"
             ));
         }
 
-        Map<String, Object> manager = new LinkedHashMap<>();
-        manager.put("id", ID_SEQ.getAndIncrement());
-        manager.put("email", email);
-        manager.put("firstName", firstName);
-        manager.put("lastName", lastName);
-        manager.put("role", "ROLE_MANAGER");
-        manager.put("createdAt", new Date());
-        MANAGERS.add(manager);
+        if (request.firstName() == null || request.firstName().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "First name is required"
+            ));
+        }
 
-        return ResponseEntity.ok(manager);
+        if (request.lastName() == null || request.lastName().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "Last name is required"
+            ));
+        }
+
+        // Check if user already exists
+        if (userRepository.existsByEmail(request.email())) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "A user with this email already exists"
+            ));
+        }
+
+        // Generate random password for the manager
+        String generatedPassword = generateRandomPassword();
+        String username = extractUsernameFromEmail(request.email());
+        
+        // Ensure username is unique
+        String finalUsername = username;
+        int counter = 1;
+        while (userRepository.existsByUsername(finalUsername)) {
+            finalUsername = username + counter;
+            counter++;
+        }
+
+        User manager = User.builder()
+            .username(finalUsername)
+            .email(request.email())
+            .firstName(request.firstName())
+            .lastName(request.lastName())
+            .password(passwordEncoder.encode(generatedPassword))
+            .roles(Set.of("ROLE_MANAGER"))
+            .build();
+
+        User savedManager = userRepository.save(manager);
+
+        Map<String, Object> response = convertToManagerResponse(savedManager);
+        response.put("generatedPassword", generatedPassword); // Show password to admin
+        response.put("passwordGenerated", true);
+        
+        return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/managers/{managerId}/reset-password")
+    public ResponseEntity<Map<String, Object>> resetManagerPassword(@PathVariable Long managerId) {
+        Optional<User> managerOpt = userRepository.findById(managerId);
+        
+        if (managerOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        User manager = managerOpt.get();
+        
+        if (!manager.getRoles().contains("ROLE_MANAGER")) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "User is not a manager"
+            ));
+        }
+        
+        // Generate new password
+        String newPassword = generateRandomPassword();
+        manager.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(manager);
+        
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "message", "Password reset successfully",
+            "newPassword", newPassword
+        ));
+    }
+
+    private Map<String, Object> convertToManagerResponse(User manager) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", manager.getId());
+        response.put("email", manager.getEmail());
+        response.put("firstName", manager.getFirstName());
+        response.put("lastName", manager.getLastName());
+        response.put("username", manager.getUsername());
+        response.put("role", "ROLE_MANAGER");
+        response.put("passwordSet", true);
+        response.put("createdAt", new Date());
+        
+        return response;
+    }
+
+    private String generateRandomPassword() {
+        // Generate a secure random password with 12 characters
+        // Contains uppercase, lowercase, numbers, and special characters
+        String upperCase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        String lowerCase = "abcdefghijklmnopqrstuvwxyz";
+        String numbers = "0123456789";
+        String specialChars = "!@#$%^&*";
+        String allChars = upperCase + lowerCase + numbers + specialChars;
+        
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder();
+        
+        // Ensure at least one character from each category
+        password.append(upperCase.charAt(random.nextInt(upperCase.length())));
+        password.append(lowerCase.charAt(random.nextInt(lowerCase.length())));
+        password.append(numbers.charAt(random.nextInt(numbers.length())));
+        password.append(specialChars.charAt(random.nextInt(specialChars.length())));
+        
+        // Fill the rest randomly
+        for (int i = 4; i < 12; i++) {
+            password.append(allChars.charAt(random.nextInt(allChars.length())));
+        }
+        
+        // Shuffle the password to avoid predictable patterns
+        char[] passwordArray = password.toString().toCharArray();
+        for (int i = passwordArray.length - 1; i > 0; i--) {
+            int j = random.nextInt(i + 1);
+            char temp = passwordArray[i];
+            passwordArray[i] = passwordArray[j];
+            passwordArray[j] = temp;
+        }
+        
+        return new String(passwordArray);
+    }
+
+    private String extractUsernameFromEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return "user";
+        }
+        return email.substring(0, email.indexOf('@')).toLowerCase();
+    }
+
 }

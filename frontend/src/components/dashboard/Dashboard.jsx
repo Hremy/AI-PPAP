@@ -27,7 +27,7 @@ export default function Dashboard() {
                 <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
                   <DocumentTextIcon className="h-5 w-5 text-secondary" />
                 </div>
-                <span className="ml-2 text-xl font-bold text-secondary">AI-PPAP</span>
+                <span className="ml-2 text-xl font-bold text-secondary">AI-PPPA</span>
               </div>
             </div>
             
@@ -76,7 +76,7 @@ export default function Dashboard() {
                 </div>
                 <div className="ml-4">
                   <h3 className="text-lg leading-6 font-medium text-secondary">
-                    Welcome to AI-PPAP Dashboard
+                    Welcome to AI-PPPA Dashboard
                   </h3>
                   <p className="mt-1 text-sm text-secondary/70">
                     You are successfully authenticated as {user?.role?.replace('ROLE_', '').toLowerCase()}

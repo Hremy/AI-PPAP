@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { loginUser } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { EyeIcon, EyeSlashIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 
 export default function LoginForm() {
@@ -15,6 +16,7 @@ export default function LoginForm() {
   const [successMessage, setSuccessMessage] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+  const { login, hasRole } = useAuth();
 
   // Check for success message from navigation state
   useEffect(() => {
@@ -46,25 +48,18 @@ export default function LoginForm() {
         return; // Do not persist token/user or navigate
       }
 
-      // Store token and user only after role check passes
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify({
-        email: data.email,
-        role: normalizedRole,
-      }));
+      // Use AuthContext login method
+      login(data.token);
 
-      // Route based on actual user role from backend
-      switch (normalizedRole) {
-        case 'ROLE_ADMIN':
-          navigate('/admin/dashboard');
-          break;
-        case 'ROLE_MANAGER':
-          navigate('/manager/dashboard');
-          break;
-        case 'ROLE_EMPLOYEE':
-        default:
-          navigate('/');
-          break;
+      // Route based on role - employees go to dashboard, managers to manager dashboard, admins to admin dashboard
+      if (normalizedRole === 'ROLE_EMPLOYEE') {
+        navigate('/dashboard');
+      } else if (normalizedRole === 'ROLE_MANAGER') {
+        navigate('/manager/dashboard');
+      } else if (normalizedRole === 'ROLE_ADMIN') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/dashboard'); // fallback
       }
     },
     onError: (error) => {
@@ -111,7 +106,7 @@ export default function LoginForm() {
                 <span className="text-secondary font-bold text-sm">AI</span>
               </div>
               <span className="text-xl font-bold text-secondary">
-                AI-PPAP
+                AI-PPPA
               </span>
             </Link>
             <Link 
@@ -137,7 +132,7 @@ export default function LoginForm() {
               Welcome back
             </h2>
             <p className="mt-2 text-secondary/70">
-              Sign in to your AI-PPAP account
+              Sign in to your AI-PPPA account
             </p>
           </div>
 

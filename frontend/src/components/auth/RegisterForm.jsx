@@ -21,7 +21,7 @@ export default function RegisterForm() {
     mutationFn: registerUser,
     onSuccess: (data) => {
       // Store token in localStorage
-      localStorage.setItem('token', data.token);
+      localStorage.setItem('ai_ppap_auth_token', data.token);
       localStorage.setItem('user', JSON.stringify({
         email: data.email,
         role: data.role

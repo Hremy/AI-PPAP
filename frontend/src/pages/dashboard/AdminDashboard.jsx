@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import EvaluationsTable from '../../components/evaluation/EvaluationsTable';
 import { 
   BuildingOfficeIcon,
   UserGroupIcon, 
@@ -48,16 +49,16 @@ const AdminDashboard = () => {
       value: adminData.systemHealth,
       suffix: '%',
       icon: ShieldCheckIcon,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
+      color: 'text-white',
+      bgColor: 'bg-[#002035]',
       change: 'All systems operational'
     },
     {
       title: 'Pending Approvals',
       value: adminData.pendingApprovals,
       icon: ClockIcon,
-      color: 'text-error',
-      bgColor: 'bg-error/10',
+      color: 'text-white',
+      bgColor: 'bg-[#002035]',
       change: 'Requires attention'
     }
   ];
@@ -110,9 +111,9 @@ const AdminDashboard = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'success': return 'text-green-600';
+      case 'success': return 'text-[#002035]';
       case 'warning': return 'text-orange-600';
-      case 'error': return 'text-error';
+      case 'error': return 'text-[#002035]';
       case 'info':
       default: return 'text-primary';
     }
@@ -121,7 +122,7 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-primary/20">
+      <div className="bg-white/90 backdrop-blur-md border-b border-primary/20 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
@@ -287,43 +288,27 @@ const AdminDashboard = () => {
               </div>
               
               <div className="text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-50 rounded-full mb-4">
-                  <ShieldCheckIcon className="w-8 h-8 text-green-600" />
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-[#002035]/10 rounded-full mb-4">
+                  <ShieldCheckIcon className="w-8 h-8 text-[#002035]" />
                 </div>
                 <h3 className="font-semibold text-secondary mb-2">Uptime</h3>
-                <p className="text-2xl font-bold text-green-600">99.9%</p>
+                <p className="text-2xl font-bold text-[#002035]">99.9%</p>
                 <p className="text-sm text-secondary/70">Last 30 Days</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Alerts & Notifications */}
-        {adminData.pendingApprovals > 0 && (
-          <div className="mt-8">
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
-              <div className="flex items-center space-x-3">
-                <ExclamationTriangleIcon className="w-6 h-6 text-orange-600" />
-                <div>
-                  <h3 className="font-semibold text-orange-800">Pending Approvals</h3>
-                  <p className="text-orange-700">
-                    You have {adminData.pendingApprovals} items requiring your approval.
-                  </p>
-                </div>
-                <Link 
-                  to="/admin/approvals" 
-                  className="ml-auto bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
-                >
-                  Review
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Submitted Evaluations Table */}
+        <div className="mt-8">
+          <EvaluationsTable />
+        </div>
+
       </div>
     </div>
   );
 };
 
 export default AdminDashboard;
+
 

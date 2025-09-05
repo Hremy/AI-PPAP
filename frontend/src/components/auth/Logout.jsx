@@ -1,21 +1,23 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { logoutUser } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Logout() {
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Clear tokens and user data, then redirect to login
-    const doLogout = async () => {
-      try {
-        await logoutUser();
-      } finally {
+    const performLogout = async () => {
+      await logout();
+      // The logout function from AuthContext should handle the navigation
+      // But we'll add a fallback in case it doesn't
+      if (window.location.pathname !== '/login') {
         navigate('/login', { replace: true });
       }
     };
-    doLogout();
-  }, [navigate]);
+
+    performLogout();
+  }, [logout, navigate]);
 
   return null;
 }

@@ -14,7 +14,6 @@ const Register = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'ROLE_EMPLOYEE'
   });
   const [errors, setErrors] = useState({});
 
@@ -25,13 +24,12 @@ const Register = () => {
         lastName: data.lastName,
         email: data.email,
         password: data.password,
-        role: data.role
+        role: 'ROLE_EMPLOYEE'
       });
       return response.data;
     },
     onSuccess: (data) => {
       // After successful registration, require user to log in
-      // Do NOT auto-login or store token/user here
       navigate('/login', { replace: true, state: { registeredEmail: data.email } });
     },
     onError: (error) => {
@@ -50,6 +48,8 @@ const Register = () => {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
+
+  // Removed project selection during registration
 
   const validateForm = () => {
     const newErrors = {};
@@ -106,7 +106,7 @@ const Register = () => {
                 <span className="text-secondary font-bold text-sm">AI</span>
               </div>
               <span className="text-xl font-bold text-secondary">
-                AI-PPAP
+                AI-PPPA
               </span>
             </Link>
             <Link 
@@ -132,7 +132,7 @@ const Register = () => {
               Create your account
             </h2>
             <p className="mt-2 text-secondary/70">
-              Join AI-PPAP and transform your performance management
+              Join AI-PPPA and transform your performance management
             </p>
           </div>
 
@@ -210,25 +210,9 @@ const Register = () => {
                 )}
               </div>
 
-              {/* Role Selection */}
-              <div>
-                <label htmlFor="role" className="block text-sm font-medium text-secondary mb-2">
-                  Register as
-                </label>
-                <select
-                  id="role"
-                  name="role"
-                  value={formData.role}
-                  onChange={handleChange}
-                  className="appearance-none relative block w-full px-4 py-3 border border-secondary/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 text-secondary bg-white"
-                >
-                  <option value="ROLE_EMPLOYEE">Employee</option>
-                  <option value="ROLE_MANAGER">Manager</option>
-                </select>
-                <p className="mt-2 text-xs text-secondary/60">
-                  Admin accounts are created by invitation only
-                </p>
-              </div>
+              {/* Role selection removed: all signups here are employees */}
+
+              {/* Project selection removed; users can add projects after login */}
 
               {/* Password Field */}
               <div>

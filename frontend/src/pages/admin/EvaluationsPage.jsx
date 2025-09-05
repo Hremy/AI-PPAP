@@ -1,6 +1,6 @@
 import React from 'react';
 import AdminLayout from './AdminLayout';
-import EvaluationsTable from '../../components/evaluation/EvaluationsTable';
+import ScoreBasedEvaluationTable from '../../components/evaluation/ScoreBasedEvaluationTable';
 
 export default function EvaluationsPage() {
   return (
@@ -14,7 +14,7 @@ export default function EvaluationsPage() {
         </div>
         
         <div className="bg-white rounded-lg shadow-sm border">
-          <EvaluationsTable />
+          <ScoreBasedEvaluationTable />
         </div>
       </div>
     </AdminLayout>
