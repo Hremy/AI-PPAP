@@ -1,5 +1,6 @@
 package com.ai.pat.backend.controller;
 
+import com.ai.pat.backend.dto.UserSummaryDTO;
 import com.ai.pat.backend.model.User;
 import com.ai.pat.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -14,9 +15,11 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
 import java.net.URI;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping({"/v1/users", "/users"})
@@ -27,7 +30,7 @@ public class UserController {
 
     @PostMapping("/managers")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<User> createManager(
+    public ResponseEntity<UserSummaryDTO> createManager(
             @RequestParam("username") String username,
             @RequestParam("email") String email,
             @RequestParam("password") String password,
@@ -44,20 +47,24 @@ public class UserController {
             .buildAndExpand(manager.getId())
             .toUri();
             
-        return ResponseEntity.created(location).body(manager);
+        return ResponseEntity.created(location).body(toDto(manager));
     }
 
     @GetMapping("/managers")
     @PreAuthorize("permitAll()")
-    public ResponseEntity<List<User>> getAllManagers() {
-        return ResponseEntity.ok(userService.getAllManagers());
+    public ResponseEntity<List<UserSummaryDTO>> getAllManagers() {
+        List<UserSummaryDTO> dtos = userService.getAllManagers()
+                .stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
     @GetMapping("/managers/{userId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<User> getManagerById(@PathVariable Map<String, String> pathVars) {
+    public ResponseEntity<UserSummaryDTO> getManagerById(@PathVariable Map<String, String> pathVars) {
         Long id = Long.parseLong(pathVars.get("userId"));
-        return ResponseEntity.ok(userService.getManagerById(id));
+        return ResponseEntity.ok(toDto(userService.getManagerById(id)));
     }
 
     @DeleteMapping("/managers/{userId}")
@@ -127,6 +134,19 @@ public class UserController {
             @RequestBody List<Long> projectIds) {
         Long id = Long.parseLong(pathVars.get("userId"));
         return ResponseEntity.ok(userService.assignManagedProjectsToManager(id, projectIds));
+    }
+
+    private UserSummaryDTO toDto(User u) {
+        if (u == null) return null;
+        UserSummaryDTO dto = new UserSummaryDTO();
+        dto.setId(u.getId());
+        dto.setUsername(u.getUsername());
+        dto.setEmail(u.getEmail());
+        dto.setFirstName(u.getFirstName());
+        dto.setLastName(u.getLastName());
+        dto.setDepartment(u.getDepartment());
+        dto.setRoles(u.getRoles() == null ? null : new HashSet<>(u.getRoles()));
+        return dto;
     }
 
     // Profile management endpoints
