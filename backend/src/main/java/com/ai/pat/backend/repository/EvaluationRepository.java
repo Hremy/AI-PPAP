@@ -38,4 +38,18 @@ public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
 
     @Query("SELECT DISTINCT e FROM Evaluation e JOIN e.employee emp LEFT JOIN emp.projects ep WHERE ep IN :projects OR e.project IN :projects")
     List<Evaluation> findByEmployeeProjectsOrEvaluationProjectIn(@Param("projects") List<Project> projects);
+
+    boolean existsByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonth(
+            Long employeeId,
+            Long projectId,
+            Integer evaluationYear,
+            Integer evaluationMonth
+    );
+
+    java.util.Optional<Evaluation> findFirstByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonthOrderByCreatedAtDesc(
+            Long employeeId,
+            Long projectId,
+            Integer evaluationYear,
+            Integer evaluationMonth
+    );
 }

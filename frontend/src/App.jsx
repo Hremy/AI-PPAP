@@ -24,6 +24,7 @@ import EvaluationsPage from './pages/admin/EvaluationsPage';
 import AdminProfile from './pages/admin/AdminProfile';
 import Projects from './pages/admin/Projects';
 import Settings from './pages/admin/Settings';
+import KEQs from './pages/admin/KEQs';
 import ManagerEvaluationsPage from './pages/manager/EvaluationsPage';
 import ManagerLayout from './pages/manager/ManagerLayout';
 import ManagerDashboard from './pages/manager/ManagerDashboard';
@@ -158,6 +159,16 @@ function App() {
                 <ProtectedRoute requiredRole="ADMIN">
                   <AdminLayout>
                     <Projects />
+                  </AdminLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/keqs" 
+              element={
+                <ProtectedRoute requiredRole="ADMIN">
+                  <AdminLayout>
+                    <KEQs />
                   </AdminLayout>
                 </ProtectedRoute>
               } 

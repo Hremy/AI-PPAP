@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../../contexts/AuthContext';
 import EvaluationsTable from '../../components/evaluation/EvaluationsTable';
 import { 
   BuildingOfficeIcon,
@@ -15,16 +17,73 @@ import {
 } from '@heroicons/react/24/outline';
 
 const AdminDashboard = () => {
-  // Mock data - will be replaced with real API calls
+  const { currentUser } = useAuth();
+
+  // Dev headers similar to other components to support backend DevHeaderAuthFilter
+  const devHeaders = useMemo(() => {
+    if (!currentUser) return {};
+    const roles = (currentUser.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',');
+    const hdr = {};
+    if (currentUser.username || currentUser.email) hdr['X-User'] = currentUser.username || currentUser.email;
+    if (roles) hdr['X-Roles'] = roles;
+    return hdr;
+  }, [currentUser]);
+
+  // Fetch managers
+  const { data: managers = [], isLoading: managersLoading } = useQuery({
+    queryKey: ['managers'],
+    queryFn: async () => {
+      const res = await fetch('http://localhost:8084/api/v1/users/managers', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          ...devHeaders
+        }
+      });
+      if (!res.ok) throw new Error('Failed to load managers');
+      return res.json();
+    }
+  });
+
+  // Fetch evaluations
+  const { data: evaluations = [], isLoading: evalsLoading } = useQuery({
+    queryKey: ['evaluations', 'admin-view'],
+    queryFn: async () => {
+      const res = await fetch('http://localhost:8084/api/v1/evaluations', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          ...devHeaders
+        }
+      });
+      if (!res.ok) throw new Error('Failed to load evaluations');
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+  });
+
+  // Derive dynamic stats from live data
+  const totalManagers = managers?.length || 0;
+  // We may not have a total employees endpoint; estimate unique employees from evaluations for now
+  const uniqueEmployees = useMemo(() => {
+    const set = new Set();
+    (evaluations || []).forEach(e => {
+      if (e.employeeEmail) set.add(e.employeeEmail);
+      else if (e.employeeId) set.add(`id:${e.employeeId}`);
+    });
+    return set.size;
+  }, [evaluations]);
+  const totalReviews = evaluations?.length || 0;
+  const pendingApprovals = (evaluations || []).filter(e => e.status === 'SUBMITTED').length;
+  const systemHealth = 99; // Placeholder; could be wired to a health endpoint
+
   const adminData = {
-    name: 'Admin User',
+    name: `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'Admin',
     role: 'System Administrator',
-    totalEmployees: 247,
-    totalManagers: 23,
-    totalReviews: 156,
-    systemHealth: 98,
-    pendingApprovals: 8,
-    activeGoals: 89
+    totalEmployees: uniqueEmployees,
+    totalManagers: totalManagers,
+    totalReviews: totalReviews,
+    systemHealth: systemHealth,
+    pendingApprovals: pendingApprovals,
+    activeGoals: 0
   };
 
   const systemStats = [
@@ -34,7 +93,7 @@ const AdminDashboard = () => {
       icon: UsersIcon,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
-      change: '+12 this month'
+      change: ''
     },
     {
       title: 'Active Managers',
@@ -42,7 +101,7 @@ const AdminDashboard = () => {
       icon: UserGroupIcon,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
-      change: '+3 this month'
+      change: ''
     },
     {
       title: 'System Health',
@@ -63,20 +122,41 @@ const AdminDashboard = () => {
     }
   ];
 
-  const recentActivities = [
-    { id: 1, type: 'user', title: 'New manager registered: John Smith', time: '2 hours ago', status: 'info' },
-    { id: 2, type: 'system', title: 'System backup completed successfully', time: '4 hours ago', status: 'success' },
-    { id: 3, type: 'review', title: '15 quarterly reviews submitted', time: '6 hours ago', status: 'info' },
-    { id: 4, type: 'alert', title: 'High server load detected', time: '8 hours ago', status: 'warning' }
-  ];
+  const recentActivities = useMemo(() => {
+    const items = (evaluations || [])
+      .slice()
+      .sort((a, b) => new Date(b.submittedAt || b.createdAt || 0) - new Date(a.submittedAt || a.createdAt || 0))
+      .slice(0, 10)
+      .map((e, idx) => ({
+        id: e.id || idx,
+        type: 'review',
+        title: `${e.employeeName || 'Employee'} submitted a ${e.status?.toLowerCase() || 'submitted'} evaluation (${e.projectName || 'No Project'})`,
+        time: new Date(e.submittedAt || e.createdAt || Date.now()).toLocaleString(),
+        status: e.status === 'REVIEWED' ? 'success' : (e.status === 'SUBMITTED' ? 'info' : 'info')
+      }));
+    return items;
+  }, [evaluations]);
 
-  const departmentStats = [
-    { name: 'Engineering', employees: 89, performance: 92, managers: 8 },
-    { name: 'Marketing', employees: 34, performance: 88, managers: 3 },
-    { name: 'Sales', employees: 56, performance: 85, managers: 5 },
-    { name: 'HR', employees: 12, performance: 94, managers: 2 },
-    { name: 'Finance', employees: 23, performance: 90, managers: 2 }
-  ];
+  // Derive a project overview from evaluations: count employees and avg rating per project
+  const departmentStats = useMemo(() => {
+    const byProject = new Map();
+    (evaluations || []).forEach(e => {
+      const key = e.projectName || 'Unassigned';
+      if (!byProject.has(key)) byProject.set(key, { name: key, employeeSet: new Set(), ratings: [] });
+      const rec = byProject.get(key);
+      if (e.employeeEmail) rec.employeeSet.add(e.employeeEmail);
+      else if (e.employeeId) rec.employeeSet.add(`id:${e.employeeId}`);
+      const overall = typeof e.overallRating === 'number' ? e.overallRating : null;
+      if (overall != null) rec.ratings.push(overall);
+    });
+    const result = Array.from(byProject.values()).map(r => ({
+      name: r.name,
+      employees: r.employeeSet.size,
+      performance: r.ratings.length ? Math.round(r.ratings.reduce((a,b)=>a+b,0) / r.ratings.length * 20) : 0, // scale 1-5 to percentage
+      managers: null
+    }));
+    return result.slice(0, 5);
+  }, [evaluations]);
 
   const quickActions = [
     {
@@ -126,7 +206,7 @@ const AdminDashboard = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-2xl font-bold text-secondary">Admin Dashboard</h1>
+              <p className="text-2xl font-bold text-secondary">Admin Dashboard</p>
               <p className="text-secondary/70">{adminData.name} • {adminData.role}</p>
             </div>
             <div className="flex items-center space-x-4">
@@ -145,6 +225,11 @@ const AdminDashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* System Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {(managersLoading || evalsLoading) ? (
+            <div className="md:col-span-2 lg:col-span-4">
+              <div className="bg-white rounded-xl shadow-sm border border-primary/10 p-6 animate-pulse h-28" />
+            </div>
+          ) : null}
           {systemStats.map((stat, index) => (
             <div key={index} className="bg-white rounded-xl shadow-sm border border-primary/10 p-6">
               <div className="flex items-center justify-between mb-4">
@@ -187,7 +272,7 @@ const AdminDashboard = () => {
                         </div>
                         <div>
                           <h3 className="font-medium text-secondary">{dept.name}</h3>
-                          <p className="text-sm text-secondary/70">{dept.employees} employees • {dept.managers} managers</p>
+                          <p className="text-sm text-secondary/70">{dept.employees} employees</p>
                         </div>
                       </div>
                       <div className="text-right">

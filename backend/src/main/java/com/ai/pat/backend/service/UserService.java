@@ -8,8 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -105,7 +103,26 @@ public class UserService {
         User manager = userRepository.findById(managerId)
                 .filter(u -> u.getRoles().contains("MANAGER") || u.getRoles().contains("ROLE_MANAGER"))
                 .orElseThrow(() -> new RuntimeException("Manager not found with id: " + managerId));
+
         Set<Project> projects = new HashSet<>(projectRepository.findAllById(projectIds));
+
+        // Enforce uniqueness: each project can only have ONE manager
+        for (Project p : projects) {
+            if (p == null || p.getId() == null) continue;
+            // Find all managers currently managing this project
+            List<User> currentManagers = userRepository.findManagersByManagedProjectIds(java.util.List.of(p.getId()));
+            for (User m : currentManagers) {
+                if (m == null || m.getId() == null) continue;
+                if (m.getId().equals(managerId)) continue; // keep assigning to target manager
+                if (m.getManagedProjects() != null && !m.getManagedProjects().isEmpty()) {
+                    // Remove this project from other managers
+                    m.getManagedProjects().removeIf(mp -> mp != null && p.getId().equals(mp.getId()));
+                    userRepository.save(m);
+                }
+            }
+        }
+
+        // Assign the projects uniquely to the target manager
         manager.setManagedProjects(projects);
         return userRepository.save(manager);
     }
@@ -120,6 +137,26 @@ public class UserService {
                     return u.getProjects();
                 })
                 .orElseGet(java.util.Collections::emptySet);
+    }
+
+    @Transactional(readOnly = true)
+    public List<User> getManagersForProjects(List<Project> projects) {
+        if (projects == null || projects.isEmpty()) return java.util.Collections.emptyList();
+        // Primary: by managedProjects using IDs to be robust across persistence contexts
+        java.util.List<Long> ids = projects.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(Project::getId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        List<User> managers = userRepository.findManagersByManagedProjectIds(ids);
+        if (managers != null && !managers.isEmpty()) return managers;
+        // Fallback: by projects + role (tolerant to role value variants in dev data)
+        managers = userRepository.findByProjectsAndRole(projects, "MANAGER");
+        if (managers == null || managers.isEmpty()) {
+            managers = userRepository.findByProjectsAndRole(projects, "ROLE_MANAGER");
+        }
+        return managers;
     }
 
     private User getOrCreateUserByUsernameOrEmail(String usernameOrEmail) {
@@ -155,5 +192,12 @@ public class UserService {
                     entityManager.flush(); // Ensure PK exists before any join table writes
                     return created;
                 });
+    }
+
+    @Transactional
+    public Long resolveOrCreateUserId(String usernameOrEmail) {
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()) return null;
+        User u = getOrCreateUserByUsernameOrEmail(usernameOrEmail);
+        return u != null ? u.getId() : null;
     }
 }

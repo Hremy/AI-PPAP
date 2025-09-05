@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchProjects, createProject, getManagers } from '../../lib/api';
+import { fetchProjects, createProject, getManagers, getEvaluations } from '../../lib/api';
 import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 export default function Projects() {
@@ -19,6 +19,12 @@ export default function Projects() {
   const { data: managers = [], isLoading: managersLoading } = useQuery({
     queryKey: ['admin','managers'],
     queryFn: getManagers,
+  });
+
+  // Fetch evaluations to estimate number of employees per project
+  const { data: evaluations = [], isLoading: evalsLoading } = useQuery({
+    queryKey: ['evaluations','for-projects'],
+    queryFn: getEvaluations,
   });
 
   const createMutation = useMutation({
@@ -60,6 +66,39 @@ export default function Projects() {
     });
     return map;
   }, [managers]);
+
+  // Fallback: derive manager display from evaluations' reviewerName per project
+  const projectReviewerNamesMap = useMemo(() => {
+    const map = new Map();
+    (evaluations || []).forEach((e) => {
+      const pid = e.projectId;
+      if (!pid) return;
+      const name = e.reviewerName;
+      if (!name) return;
+      if (!map.has(pid)) map.set(pid, new Set());
+      map.get(pid).add(name);
+    });
+    // Convert to array of strings for easy rendering
+    const out = new Map();
+    for (const [pid, set] of map.entries()) out.set(pid, Array.from(set));
+    return out;
+  }, [evaluations]);
+
+  // Build map: projectId -> unique employees (by email or id) based on evaluations submitted for that project
+  const projectEmployeeCountMap = useMemo(() => {
+    const map = new Map();
+    (evaluations || []).forEach((e) => {
+      const pid = e.projectId;
+      if (!pid) return;
+      if (!map.has(pid)) map.set(pid, new Set());
+      const key = e.employeeEmail || (e.employeeId ? `id:${e.employeeId}` : null);
+      if (key) map.get(pid).add(key);
+    });
+    // Convert to counts
+    const counts = new Map();
+    for (const [pid, set] of map.entries()) counts.set(pid, set.size);
+    return counts;
+  }, [evaluations]);
 
   return (
     <div className="space-y-6">
@@ -106,7 +145,7 @@ export default function Projects() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-primary/10">
-              {isLoading || managersLoading ? (
+              {isLoading || managersLoading || evalsLoading ? (
                 <tr><td className="px-6 py-4 text-secondary/60" colSpan={3}>Loading...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td className="px-6 py-10 text-secondary/60" colSpan={3}>No projects found</td></tr>
@@ -117,19 +156,42 @@ export default function Projects() {
                     <td className="px-6 py-4">
                       {(() => {
                         const ms = projectManagersMap.get(p.id) || [];
-                        if (ms.length === 0) return <span className="text-secondary/60">—</span>;
-                        const names = ms.map((m) => `${m.firstName || ''} ${m.lastName || ''}`.trim()).filter(Boolean);
-                        return (
-                          <div className="text-secondary">
-                            <div className="text-sm font-medium">{ms.length} manager{ms.length>1?'s':''}</div>
-                            <div className="text-xs text-secondary/70 truncate max-w-xs" title={names.join(', ')}>
-                              {names.join(', ')}
+                        if (ms.length > 0) {
+                          const names = ms.map((m) => `${m.firstName || ''} ${m.lastName || ''}`.trim()).filter(Boolean);
+                          return (
+                            <div className="text-secondary">
+                              <div className="text-sm font-medium">{ms.length} manager{ms.length>1?'s':''}</div>
+                              <div className="text-xs text-secondary/70 truncate max-w-xs" title={names.join(', ')}>
+                                {names.join(', ')}
+                              </div>
                             </div>
-                          </div>
+                          );
+                        }
+                        // fallback using reviewer names from evaluations
+                        const fallbackNames = projectReviewerNamesMap.get(p.id) || [];
+                        if (fallbackNames.length > 0) {
+                          return (
+                            <div className="text-secondary">
+                              <div className="text-sm font-medium">{fallbackNames.length} manager{fallbackNames.length>1?'s':''}</div>
+                              <div className="text-xs text-secondary/70 truncate max-w-xs" title={fallbackNames.join(', ')}>
+                                {fallbackNames.join(', ')}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return <span className="text-secondary/60">—</span>;
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 text-secondary">
+                      {(() => {
+                        const count = projectEmployeeCountMap.get(p.id) || 0;
+                        return count > 0 ? (
+                          <span className="text-secondary">{count}</span>
+                        ) : (
+                          <span className="text-secondary/60">—</span>
                         );
                       })()}
                     </td>
-                    <td className="px-6 py-4 text-secondary/60">—</td>
                   </tr>
                 ))
               )}

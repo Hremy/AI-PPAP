@@ -1,5 +1,7 @@
 package com.ai.pat.backend.controller;
 
+import com.ai.pat.backend.dto.UserSummaryDTO;
+import com.ai.pat.backend.model.Project;
 import com.ai.pat.backend.model.User;
 import com.ai.pat.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -14,12 +16,15 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping({"/v1/users", "/users"})
+@RequestMapping({"/v1/users", "/users", "/api/v1/users", "/api/users"})
 @RequiredArgsConstructor
 public class UserController {
 
@@ -27,7 +32,7 @@ public class UserController {
 
     @PostMapping("/managers")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<User> createManager(
+    public ResponseEntity<UserSummaryDTO> createManager(
             @RequestParam("username") String username,
             @RequestParam("email") String email,
             @RequestParam("password") String password,
@@ -44,20 +49,46 @@ public class UserController {
             .buildAndExpand(manager.getId())
             .toUri();
             
-        return ResponseEntity.created(location).body(manager);
+        return ResponseEntity.created(location).body(toDto(manager));
     }
 
     @GetMapping("/managers")
     @PreAuthorize("permitAll()")
-    public ResponseEntity<List<User>> getAllManagers() {
-        return ResponseEntity.ok(userService.getAllManagers());
+    public ResponseEntity<List<Map<String, Object>>> getAllManagers() {
+        List<Map<String, Object>> dtos = userService.getAllManagers()
+                .stream()
+                .map(u -> {
+                    Map<String, Object> m = new java.util.HashMap<>();
+                    m.put("id", u.getId());
+                    m.put("username", u.getUsername());
+                    m.put("email", u.getEmail());
+                    m.put("firstName", u.getFirstName());
+                    m.put("lastName", u.getLastName());
+                    m.put("department", u.getDepartment());
+                    m.put("roles", u.getRoles() == null ? null : new java.util.HashSet<>(u.getRoles()));
+                    // Add managedProjects slim DTO
+                    List<Map<String, Object>> mps = new java.util.ArrayList<>();
+                    if (u.getManagedProjects() != null) {
+                        for (com.ai.pat.backend.model.Project p : u.getManagedProjects()) {
+                            if (p == null) continue;
+                            Map<String, Object> mp = new java.util.HashMap<>();
+                            mp.put("id", p.getId());
+                            mp.put("name", p.getName());
+                            mps.add(mp);
+                        }
+                    }
+                    m.put("managedProjects", mps);
+                    return m;
+                })
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
     @GetMapping("/managers/{userId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public ResponseEntity<User> getManagerById(@PathVariable Map<String, String> pathVars) {
+    public ResponseEntity<UserSummaryDTO> getManagerById(@PathVariable Map<String, String> pathVars) {
         Long id = Long.parseLong(pathVars.get("userId"));
-        return ResponseEntity.ok(userService.getManagerById(id));
+        return ResponseEntity.ok(toDto(userService.getManagerById(id)));
     }
 
     @DeleteMapping("/managers/{userId}")
@@ -70,15 +101,29 @@ public class UserController {
 
     @PutMapping("/{userId:\\d+}/projects")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<User> assignProjectsToUser(
+    public ResponseEntity<Map<String, Object>> assignProjectsToUser(
             @PathVariable Map<String, String> pathVars,
             @RequestBody List<Long> projectIds) {
         Long id = Long.parseLong(pathVars.get("userId"));
-        return ResponseEntity.ok(userService.assignProjectsToUser(id, projectIds));
+        User u = userService.assignProjectsToUser(id, projectIds);
+        List<Map<String, Object>> projDtos = new ArrayList<>();
+        if (u != null && u.getProjects() != null) {
+            for (Project p : u.getProjects()) {
+                if (p == null) continue;
+                Map<String, Object> pm = new java.util.HashMap<>();
+                pm.put("id", p.getId());
+                pm.put("name", p.getName());
+                projDtos.add(pm);
+            }
+        }
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("id", u != null ? u.getId() : id);
+        body.put("projects", projDtos);
+        return ResponseEntity.ok(body);
     }
 
     @PutMapping("/me/projects")
-    public ResponseEntity<User> assignProjectsToCurrentUser(
+    public ResponseEntity<Map<String, Object>> assignProjectsToCurrentUser(
             @RequestHeader(value = "X-User", required = false) String xUser,
             @RequestParam(value = "username", required = false) String username,
             @RequestParam(value = "email", required = false) String email,
@@ -94,9 +139,26 @@ public class UserController {
         }
 
         if (key == null || key.isBlank()) {
-            return ResponseEntity.badRequest().body(null);
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                    "success", false,
+                    "message", "Missing user key"
+            ));
         }
-        return ResponseEntity.ok(userService.assignProjectsToCurrentUser(key, projectIds));
+        User u = userService.assignProjectsToCurrentUser(key, projectIds);
+        List<Map<String, Object>> projDtos = new ArrayList<>();
+        if (u != null && u.getProjects() != null) {
+            for (Project p : u.getProjects()) {
+                if (p == null) continue;
+                Map<String, Object> pm = new java.util.HashMap<>();
+                pm.put("id", p.getId());
+                pm.put("name", p.getName());
+                projDtos.add(pm);
+            }
+        }
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("id", u != null ? u.getId() : null);
+        body.put("projects", projDtos);
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/me/projects")
@@ -120,13 +182,74 @@ public class UserController {
         return ResponseEntity.ok(userService.getProjectsForUser(key));
     }
 
+    @GetMapping("/me/projects-with-managers")
+    public ResponseEntity<Object> getProjectsWithManagersForCurrentUser(
+            @RequestHeader(value = "X-User", required = false) String xUser,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "email", required = false) String email) {
+        String key = xUser != null && !xUser.isBlank() ? xUser
+                : (username != null && !username.isBlank() ? username : email);
+
+        if (key == null || key.isBlank()) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && auth.getName() != null && !auth.getName().isBlank()) {
+                key = auth.getName();
+            }
+        }
+
+        if (key == null || key.isBlank()) {
+            return ResponseEntity.badRequest().body(new ArrayList<>());
+        }
+
+        Set<Project> projects = userService.getProjectsForUser(key);
+        if (projects == null || projects.isEmpty()) {
+            return ResponseEntity.ok(new ArrayList<>());
+        }
+
+        // Find managers per project
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Project p : projects) {
+            if (p == null) continue;
+            List<User> managers = userService.getManagersForProjects(java.util.List.of(p));
+            List<Map<String, Object>> mgrDtos = new ArrayList<>();
+            for (User m : managers) {
+                java.util.HashMap<String, Object> mm = new java.util.HashMap<>();
+                mm.put("id", m.getId());
+                mm.put("username", m.getUsername());
+                mm.put("email", m.getEmail());
+                mm.put("fullName", m.getFullName());
+                mgrDtos.add(mm);
+            }
+            java.util.HashMap<String, Object> pMap = new java.util.HashMap<>();
+            pMap.put("projectId", p.getId());
+            pMap.put("projectName", p.getName());
+            pMap.put("managers", mgrDtos);
+            result.add(pMap);
+        }
+
+        return ResponseEntity.ok(result);
+    }
+
     @PutMapping("/{userId:\\d+}/managed-projects")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<User> assignManagedProjectsToManager(
             @PathVariable Map<String, String> pathVars,
             @RequestBody List<Long> projectIds) {
         Long id = Long.parseLong(pathVars.get("userId"));
         return ResponseEntity.ok(userService.assignManagedProjectsToManager(id, projectIds));
+    }
+
+    private UserSummaryDTO toDto(User u) {
+        if (u == null) return null;
+        UserSummaryDTO dto = new UserSummaryDTO();
+        dto.setId(u.getId());
+        dto.setUsername(u.getUsername());
+        dto.setEmail(u.getEmail());
+        dto.setFirstName(u.getFirstName());
+        dto.setLastName(u.getLastName());
+        dto.setDepartment(u.getDepartment());
+        dto.setRoles(u.getRoles() == null ? null : new HashSet<>(u.getRoles()));
+        return dto;
     }
 
     // Profile management endpoints
