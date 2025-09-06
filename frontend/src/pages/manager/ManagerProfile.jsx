@@ -38,7 +38,9 @@ const ManagerProfile = () => {
     queryFn: async () => {
       const response = await fetch('http://localhost:8084/api/v1/users/profile', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          'X-User': currentUser?.username || currentUser?.email || '',
+          'X-Roles': 'MANAGER'
         }
       });
       
@@ -67,7 +69,9 @@ const ManagerProfile = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          'X-User': currentUser?.username || currentUser?.email || '',
+          'X-Roles': 'MANAGER'
         },
         body: JSON.stringify(data)
       });
@@ -79,9 +83,20 @@ const ManagerProfile = () => {
       
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries(['managerProfile']);
-      toast.success('Profile updated successfully!');
+      // Update local state with the response data
+      if (data.success !== false) {
+        setProfileData({
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          department: data.department || '',
+          position: data.position || ''
+        });
+      }
+      toast.success(data.message || 'Profile updated successfully!');
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to update profile');
@@ -95,7 +110,9 @@ const ManagerProfile = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          'X-User': currentUser?.username || currentUser?.email || '',
+          'X-Roles': 'MANAGER'
         },
         body: JSON.stringify(data)
       });
@@ -107,8 +124,8 @@ const ManagerProfile = () => {
       
       return response.json();
     },
-    onSuccess: () => {
-      toast.success('Password changed successfully!');
+    onSuccess: (data) => {
+      toast.success(data.message || 'Password changed successfully!');
       setPasswordData({
         currentPassword: '',
         newPassword: '',

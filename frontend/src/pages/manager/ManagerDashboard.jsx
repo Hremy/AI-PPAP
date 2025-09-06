@@ -43,18 +43,18 @@ const ManagerDashboard = () => {
 
   const stats = [
     {
-      name: 'Pending Reviews',
+      name: 'Total Evaluations',
+      value: String((dashboard.pendingReviews ?? 0) + (dashboard.completedReviews ?? 0)),
+      icon: DocumentTextIcon,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+    },
+    {
+      name: 'Pending Review',
       value: String(dashboard.pendingReviews ?? 0),
       icon: ClockIcon,
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-50',
-    },
-    {
-      name: 'Completed Reviews',
-      value: String(dashboard.completedReviews ?? 0),
-      icon: CheckCircleIcon,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
     },
     {
       name: 'Team Members',

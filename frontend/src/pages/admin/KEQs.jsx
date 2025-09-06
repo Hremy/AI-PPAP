@@ -8,7 +8,7 @@ export default function KEQs() {
   const [search, setSearch] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ text: '', category: '', orderIndex: 0, effectiveFromYear: new Date().getFullYear(), effectiveFromQuarter: Math.floor(new Date().getMonth() / 3) + 1, isActive: true });
+  const [form, setForm] = useState({ category: '', description: '', orderIndex: 1, effectiveFromYear: '', effectiveFromQuarter: '', isActive: true });
   const [error, setError] = useState('');
 
   const { data: keqs = [], isLoading } = useQuery({
@@ -74,14 +74,14 @@ export default function KEQs() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.text.trim()) {
-      setError('Question text is required');
+    if (!form.category.trim()) {
+      setError('Question category is required');
       return;
     }
     const payload = {
-      text: form.text.trim(),
-      category: form.category || null,
-      orderIndex: Number(form.orderIndex) || 0,
+      category: form.category.trim(),
+      description: form.description || null,
+      orderIndex: Number(form.orderIndex) || 1,
       effectiveFromYear: Number(form.effectiveFromYear),
       effectiveFromQuarter: Number(form.effectiveFromQuarter),
       isActive: !!form.isActive,
@@ -123,8 +123,8 @@ export default function KEQs() {
           <table className="min-w-full divide-y divide-primary/10">
             <thead className="bg-background">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-secondary/70 uppercase tracking-wider">Question</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary/70 uppercase tracking-wider">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-secondary/70 uppercase tracking-wider">Description</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary/70 uppercase tracking-wider">Effective From</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary/70 uppercase tracking-wider">Active</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary/70 uppercase tracking-wider">Order</th>
@@ -139,8 +139,8 @@ export default function KEQs() {
               ) : (
                 filtered.map((k) => (
                   <tr key={k.id}>
-                    <td className="px-6 py-4 text-secondary">{k.text}</td>
-                    <td className="px-6 py-4 text-secondary/80">{k.category || '-'}</td>
+                    <td className="px-6 py-4 text-secondary font-medium">{k.category}</td>
+                    <td className="px-6 py-4 text-secondary/80">{k.description || '-'}</td>
                     <td className="px-6 py-4 text-secondary/80">{`Q${k.effectiveFromQuarter || '-'} ${k.effectiveFromYear || '-'}`}</td>
                     <td className="px-6 py-4">{k.isActive ? <span className="text-green-700 text-sm">Active</span> : <span className="text-secondary/60 text-sm">Inactive</span>}</td>
                     <td className="px-6 py-4 text-secondary/80">{k.orderIndex ?? 0}</td>
@@ -169,24 +169,16 @@ export default function KEQs() {
               <h3 className="text-lg font-semibold text-secondary">{editId ? 'Edit KEQ' : 'New KEQ'}</h3>
             </div>
             <form className="p-6 space-y-4" onSubmit={handleSubmit}>
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">Question Text</label>
-                <textarea
-                  value={form.text}
-                  onChange={(e) => setForm({ ...form, text: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg border-secondary/30 focus:ring-2 focus:ring-primary focus:border-primary"
-                  rows={3}
-                  required
-                />
-              </div>
+              {/* Row 1: Question + Display order */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-secondary mb-1">Category (optional)</label>
+                  <label className="block text-sm font-medium text-secondary mb-1">Question Category</label>
                   <input
                     type="text"
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg border-secondary/30 focus:ring-2 focus:ring-primary focus:border-primary"
+                    required
                   />
                 </div>
                 <div>
@@ -196,9 +188,25 @@ export default function KEQs() {
                     value={form.orderIndex}
                     onChange={(e) => setForm({ ...form, orderIndex: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg border-secondary/30 focus:ring-2 focus:ring-primary focus:border-primary"
+                    min={1}
                   />
                 </div>
               </div>
+
+              {/* Row 2: Description (bigger, 100 char limit) */}
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">Description (max 100 chars)</label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value.slice(0, 100) })}
+                  className="w-full px-3 py-2 border rounded-lg border-secondary/30 focus:ring-2 focus:ring-primary focus:border-primary"
+                  rows={4}
+                  maxLength={100}
+                  placeholder="Optional short description"
+                />
+                <div className="text-xs text-secondary/60 mt-1">{(form.description || '').length}/100</div>
+              </div>
+              {/* Row 3: Effective from Year/Quarter and Active */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-secondary mb-1">Effective Year</label>
@@ -207,7 +215,7 @@ export default function KEQs() {
                     value={form.effectiveFromYear}
                     onChange={(e) => setForm({ ...form, effectiveFromYear: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg border-secondary/30 focus:ring-2 focus:ring-primary focus:border-primary"
-                    min={2000}
+                    min={1}
                   />
                 </div>
                 <div>

@@ -462,6 +462,19 @@ public class EvaluationService {
             Map<String, Integer> existingRatings = evaluation.getManagerCompetencyRatings();
             existingRatings.put(competency, score);
             
+            // Recalculate overall manager rating from competency ratings
+            log.info("8.5. Recalculating overall manager rating from competency ratings");
+            if (!existingRatings.isEmpty()) {
+                double averageRating = existingRatings.values().stream()
+                    .mapToInt(Integer::intValue)
+                    .average()
+                    .orElse(0.0);
+                // Keep decimal precision, round to 1 decimal place
+                double roundedRating = Math.round(averageRating * 10.0) / 10.0;
+                evaluation.setManagerRating((int) Math.round(roundedRating)); // Still store as int for DB compatibility
+                log.info("8.6. Calculated manager rating: {} (from {} competencies)", roundedRating, existingRatings.size());
+            }
+            
             // Set the reviewed timestamp and status
             log.info("9. Updating review timestamp and status to REVIEWED");
             evaluation.setReviewedAt(LocalDateTime.now());

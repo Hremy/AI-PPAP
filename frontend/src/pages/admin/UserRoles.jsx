@@ -45,6 +45,20 @@ export default function UserRoles() {
 
   const sortedProjects = useMemo(() => (projects || []).slice().sort((a,b)=>a.name.localeCompare(b.name)), [projects]);
 
+  // Map: projectId -> { managerId, managerName }
+  const occupiedBy = useMemo(() => {
+    const map = new Map();
+    (managers || []).forEach(m => {
+      (m.managedProjects || []).forEach(p => {
+        if (p && p.id != null) {
+          const name = `${m.firstName || ''} ${m.lastName || ''}`.trim() || (m.email || 'Manager');
+          map.set(p.id, { managerId: m.id, managerName: name });
+        }
+      });
+    });
+    return map;
+  }, [managers]);
+
   const createMutation = useMutation({
     mutationFn: createManager,
     onSuccess: () => {
@@ -160,7 +174,7 @@ export default function UserRoles() {
     );
   };
 
-  const AssignProjectsModal = ({ open, manager, projects, selectedIds, onToggle, onCancel, onSave, saving }) => {
+  const AssignProjectsModal = ({ open, manager, projects, selectedIds, onToggle, onCancel, onSave, saving, occupiedBy }) => {
     if (!open || !manager) return null;
     return (
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -174,12 +188,28 @@ export default function UserRoles() {
               {projects.length === 0 ? (
                 <p className="text-sm text-secondary/60">No projects available.</p>
               ) : (
-                projects.map((p) => (
-                  <label key={p.id} className="flex items-center gap-2 text-sm text-secondary">
-                    <input type="checkbox" className="rounded border-secondary/40" checked={selectedIds.includes(p.id)} onChange={() => onToggle(p.id)} />
-                    <span>{p.name}</span>
-                  </label>
-                ))
+                projects.map((p) => {
+                  const occ = occupiedBy?.get(p.id);
+                  const isAssignedToOther = occ && occ.managerId !== manager.id;
+                  const checked = selectedIds.includes(p.id);
+                  return (
+                    <label key={p.id} className="flex items-center justify-between gap-2 text-sm text-secondary">
+                      <span className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="rounded border-secondary/40"
+                          checked={checked}
+                          disabled={isAssignedToOther}
+                          onChange={() => onToggle(p.id)}
+                        />
+                        <span>{p.name}</span>
+                      </span>
+                      {isAssignedToOther && (
+                        <span className="text-xs text-secondary/60">Assigned to {occ.managerName}</span>
+                      )}
+                    </label>
+                  );
+                })
               )}
             </div>
             <div className="flex justify-end gap-3">
@@ -370,6 +400,7 @@ export default function UserRoles() {
           onCancel={() => { setAssignOpen(false); setSelectedManager(null); setSelectedProjectIds([]); }}
           onSave={() => assignMutation.mutate({ userId: selectedManager.id, projectIds: selectedProjectIds })}
           saving={assignMutation.isPending}
+          occupiedBy={occupiedBy}
         />
       </div>
       </div>

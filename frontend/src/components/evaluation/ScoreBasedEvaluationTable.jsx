@@ -4,6 +4,7 @@ import { StarIcon, PencilIcon, CheckIcon, XMarkIcon, TrashIcon, CalendarIcon } f
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { getKEQs } from '../../lib/api';
 
 const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed = false }) => {
   const [evaluations, setEvaluations] = useState([]);
@@ -19,17 +20,23 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
   const { hasRole, currentUser } = useAuth();
   const isAdmin = hasRole('ADMIN');
 
-  // Competencies that should be displayed as columns
-  const competencies = [
-    { id: 'technical_skills', name: 'Technical Skills' },
-    { id: 'communication', name: 'Communication' },
-    { id: 'problem_solving', name: 'Problem Solving' },
-    { id: 'teamwork', name: 'Teamwork' },
-    { id: 'leadership', name: 'Leadership' },
-    { id: 'adaptability', name: 'Adaptability' },
-    { id: 'time_management', name: 'Time Management' },
-    { id: 'quality_focus', name: 'Quality Focus' }
-  ];
+  // Load KEQs and derive competencies dynamically (use KEQ text as title key)
+  const { data: keqs = [] } = useQuery({
+    queryKey: ['keqs','all'],
+    queryFn: async () => {
+      try { return await getKEQs(); } catch { return []; }
+    }
+  });
+
+  const snake = (s) => s?.toString()?.trim()?.toLowerCase()?.replace(/[^a-z0-9]+/g, '_')?.replace(/^_+|_+$/g, '') || '';
+  const competencies = useMemo(() => {
+    if (!Array.isArray(keqs)) return [];
+    // For table views, we do not filter by effective date; we show current KEQs as columns
+    return keqs
+      .filter(k => k && k.category)
+      .sort((a,b)=> (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+      .map(k => ({ id: snake(k.category), name: k.category }));
+  }, [keqs]);
 
   // Fetch evaluations
   const { data: evaluationsData, isLoading, error: queryError } = useQuery({
@@ -333,14 +340,32 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
   // Compute average of manager competency scores (1-5), excluding 'overall'. Returns number (one decimal) or null
   const computeManagerAverage = (managerRatings) => {
     if (!managerRatings) return null;
-    const competencyIds = new Set(competencies.map(c => c.id));
+    
+    // Get all valid rating values regardless of key matching
     const values = Object.entries(managerRatings)
-      .filter(([key]) => competencyIds.has(key))
-      .map(([, v]) => (typeof v === 'string' ? parseInt(v, 10) : v))
-      .filter(v => Number.isFinite(v) && v >= 1 && v <= 5);
+      .filter(([key]) => key !== 'overall')
+      .map(([, v]) => (typeof v === 'string' ? parseFloat(v) : v))
+      .filter(v => Number.isFinite(v) && v >= 1 && v <= 5 && v !== 0);
+    
     if (!values.length) return null;
     const rawAvg = values.reduce((a, b) => a + b, 0) / values.length;
-    const oneDecimal = Math.round(rawAvg * 10) / 10; // keep one decimal for display
+    const oneDecimal = Math.round(rawAvg * 10) / 10;
+    return Math.min(5, Math.max(1, oneDecimal));
+  };
+
+  // Compute average of employee competency scores (1-5), excluding 'overall'. Returns number (one decimal) or null
+  const computeEmployeeAverage = (employeeRatings) => {
+    if (!employeeRatings) return null;
+    
+    // Get all valid rating values regardless of key matching
+    const values = Object.entries(employeeRatings)
+      .filter(([key]) => key !== 'overall')
+      .map(([, v]) => (typeof v === 'string' ? parseFloat(v) : v))
+      .filter(v => Number.isFinite(v) && v >= 1 && v <= 5 && v !== 0);
+    
+    if (!values.length) return null;
+    const rawAvg = values.reduce((a, b) => a + b, 0) / values.length;
+    const oneDecimal = Math.round(rawAvg * 10) / 10;
     return Math.min(5, Math.max(1, oneDecimal));
   };
 
@@ -415,23 +440,73 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
   };
 
   const renderScoreCell = (evaluation, competency) => {
-    const key = `${evaluation.id}-${competency.id}`;
+    const key = `${evaluation.id}-${competency.name}`;
     const isEditing = editingScores[key];
-    // Backend returns title-cased competency keys (e.g., 'Technical Skills'), while
-    // our UI competency ids are snake_case (e.g., 'technical_skills'). Read both.
-    const titleMap = {
-      technical_skills: 'Technical Skills',
-      communication: 'Communication',
-      problem_solving: 'Problem Solving',
-      teamwork: 'Teamwork',
-      leadership: 'Leadership',
-      adaptability: 'Adaptability',
-      time_management: 'Time Management',
-      quality_focus: 'Quality Focus',
+    // KEQ ratings are stored using the actual KEQ category names
+    // Convert KEQ category to title case to match stored employee ratings
+    const toTitleCase = (str) => {
+      return str.toLowerCase().split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
     };
-    const titleKey = titleMap[competency.id] || competency.name;
-    const employeeScore = (evaluation.competencyRatings?.[competency.id] ?? evaluation.competencyRatings?.[titleKey]);
-    const managerScore = (evaluation.managerCompetencyRatings?.[competency.id] ?? evaluation.managerCompetencyRatings?.[titleKey]);
+    
+    const titleCaseKey = toTitleCase(competency.name);
+    
+    // Try multiple formats to match stored employee ratings
+    // Special handling for common variations
+    const getEmployeeScore = () => {
+      const ratingsObj = evaluation.competencyRatings || evaluation.ratings || {};
+      
+      // Direct matches
+      if (ratingsObj[titleCaseKey]) return ratingsObj[titleCaseKey];
+      if (ratingsObj[competency.name]) return ratingsObj[competency.name];
+      
+      // Special cases for known variations
+      if (competency.name === 'QUALITY' && ratingsObj['Quality Focus']) return ratingsObj['Quality Focus'];
+      if (competency.name === 'TECHNICAL SKILLS' && ratingsObj['Technical Skills']) return ratingsObj['Technical Skills'];
+      
+      // Fallback to case variations
+      const keys = Object.keys(ratingsObj);
+      const normalizedCompetency = competency.name.toLowerCase().replace(/\s+/g, '');
+      
+      for (const key of keys) {
+        const normalizedKey = key.toLowerCase().replace(/\s+/g, '');
+        if (normalizedKey.includes(normalizedCompetency) || normalizedCompetency.includes(normalizedKey)) {
+          return ratingsObj[key];
+        }
+      }
+      
+      return null;
+    };
+    
+    const employeeScore = getEmployeeScore();
+    // Manager score lookup with same smart matching as employee scores
+    const getManagerScore = () => {
+      const ratingsObj = evaluation.managerCompetencyRatings || {};
+      
+      // Direct matches
+      if (ratingsObj[titleCaseKey]) return ratingsObj[titleCaseKey];
+      if (ratingsObj[competency.name]) return ratingsObj[competency.name];
+      
+      // Special cases for known variations
+      if (competency.name === 'QUALITY' && ratingsObj['Quality Focus']) return ratingsObj['Quality Focus'];
+      if (competency.name === 'TECHNICAL SKILLS' && ratingsObj['Technical Skills']) return ratingsObj['Technical Skills'];
+      
+      // Fallback to case variations
+      const keys = Object.keys(ratingsObj);
+      const normalizedCompetency = competency.name.toLowerCase().replace(/\s+/g, '');
+      
+      for (const key of keys) {
+        const normalizedKey = key.toLowerCase().replace(/\s+/g, '');
+        if (normalizedKey.includes(normalizedCompetency) || normalizedCompetency.includes(normalizedKey)) {
+          return ratingsObj[key];
+        }
+      }
+      
+      return null;
+    };
+    
+    const managerScore = getManagerScore();
     
     return (
       <td key={competency.id} className="px-4 py-4 border-r border-gray-200">
@@ -439,16 +514,16 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
           {/* Employee Score */}
           <div className="bg-blue-50 rounded-lg p-2">
             <div className="text-xs font-medium text-blue-700 mb-1">Employee</div>
-            {renderStars(employeeScore)}
+            {employeeScore ? renderStars(employeeScore) : <span className="text-gray-400 text-sm">Not rated</span>}
           </div>
           
           {/* Manager Score */}
           <div className="rounded-lg p-2" style={{backgroundColor: 'rgb(0 32 53 / 0.1)'}}>
             <div className="text-xs font-medium mb-1 flex items-center justify-between" style={{color: 'rgb(0 32 53)'}}>
               <span>Manager</span>
-              {!isEditing && hasRole('MANAGER') && !hasRole('ADMIN') && (
+              {!isEditing && hasRole('MANAGER') && (
                 <button
-                  onClick={() => handleEditScore(evaluation.id, competency.id)}
+                  onClick={() => handleEditScore(evaluation.id, competency.name)}
                   className="transition-colors"
                   style={{color: 'rgb(0 32 53)'}}
                 >
@@ -460,7 +535,7 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
               <div className="flex items-center space-x-1">
                 <select
                   value={managerScores[key] || 0}
-                  onChange={(e) => handleScoreChange(evaluation.id, competency.id, e.target.value)}
+                  onChange={(e) => handleScoreChange(evaluation.id, competency.name, e.target.value)}
                   className="text-xs border border-gray-300 rounded px-1 py-1 w-12"
                 >
                   <option value={0}>-</option>
@@ -469,7 +544,7 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
                   ))}
                 </select>
                 <button
-                  onClick={() => handleSaveScore(evaluation.id, competency.id)}
+                  onClick={() => handleSaveScore(evaluation.id, competency.name)}
                   className="transition-colors"
                   style={{color: 'rgb(0 32 53)'}}
                   disabled={submitManagerScoreMutation.isLoading}
@@ -477,14 +552,14 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
                   <CheckIcon className="w-3 h-3" />
                 </button>
                 <button
-                  onClick={() => handleCancelEdit(evaluation.id, competency.id)}
+                  onClick={() => handleCancelEdit(evaluation.id, competency.name)}
                   className="text-red-600 hover:text-red-800 transition-colors"
                 >
                   <XMarkIcon className="w-3 h-3" />
                 </button>
               </div>
             ) : (
-              renderStars(managerScore)
+              managerScore ? renderStars(managerScore) : <span className="text-gray-400 text-sm">Not rated</span>
             )}
           </div>
         </div>
@@ -627,7 +702,18 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
                       {/* Employee Overall Rating */}
                       <div className="bg-blue-50 rounded-lg p-2">
                         <div className="text-xs font-medium text-blue-700 mb-1">Employee</div>
-                        {renderStars(evaluation.overallRating)}
+                        {(() => {
+                          // Only show computed average if there are actual ratings, not as fallback
+                          const hasActualRatings = evaluation.competencyRatings && Object.keys(evaluation.competencyRatings).length > 0;
+                          if (evaluation.overallRating) {
+                            return renderStars(evaluation.overallRating);
+                          } else if (hasActualRatings) {
+                            const computed = computeEmployeeAverage(evaluation.competencyRatings);
+                            return computed ? renderStars(computed) : <span className="text-gray-400 text-sm">Not rated</span>;
+                          } else {
+                            return <span className="text-gray-400 text-sm">Not rated</span>;
+                          }
+                        })()}
                       </div>
                       
                       {/* Manager Overall Rating (read-only, auto-computed) */}
@@ -636,8 +722,16 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed =
                           <span>Manager</span>
                         </div>
                         {(() => {
-                          const fallback = computeManagerAverage(evaluation.managerCompetencyRatings);
-                          return renderStars(evaluation.managerRating || fallback);
+                          // Always prioritize computed average over stored managerRating
+                          const hasActualRatings = evaluation.managerCompetencyRatings && Object.keys(evaluation.managerCompetencyRatings).length > 0;
+                          if (hasActualRatings) {
+                            const computed = computeManagerAverage(evaluation.managerCompetencyRatings);
+                            return computed ? renderStars(computed) : <span className="text-gray-400 text-sm">Not rated</span>;
+                          } else if (evaluation.managerRating) {
+                            return renderStars(evaluation.managerRating);
+                          } else {
+                            return <span className="text-gray-400 text-sm">Not rated</span>;
+                          }
                         })()}
                       </div>
                     </div>

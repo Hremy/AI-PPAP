@@ -21,7 +21,7 @@ public class KeqController {
     private final EvaluationRepository evaluationRepository;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ADMIN','ROLE_MANAGER','MANAGER','ROLE_EMPLOYEE','EMPLOYEE')")
     public ResponseEntity<List<Keq>> list() {
         // Bootstrap from evaluations if empty
         try { keqService.bootstrapFromEvaluationsIfEmpty(evaluationRepository); } catch (Exception ignore) {}
@@ -29,19 +29,19 @@ public class KeqController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ADMIN')")
     public ResponseEntity<Keq> create(@RequestBody Keq payload) {
         return ResponseEntity.ok(keqService.create(payload));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ADMIN')")
     public ResponseEntity<Keq> update(@PathVariable("id") Long id, @RequestBody Keq payload) {
         return ResponseEntity.ok(keqService.update(id, payload));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ADMIN')")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable("id") Long id) {
         keqService.delete(id);
         Map<String, Object> body = new HashMap<>();

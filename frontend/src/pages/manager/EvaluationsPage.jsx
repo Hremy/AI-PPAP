@@ -3,12 +3,19 @@ import ManagerLayout from './ManagerLayout';
 import ScoreBasedEvaluationTable from '../../components/evaluation/ScoreBasedEvaluationTable';
 import { DocumentTextIcon, UsersIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
+import { getManagerDashboard, getEvaluations } from '../../lib/api';
 
 export default function ManagerEvaluationsPage() {
   const { currentUser } = useAuth();
   const [projects, setProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
-  const [selectedProjectIds, setSelectedProjectIds] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState(null); // null means "All"
+  const [dashboardStats, setDashboardStats] = useState({
+    pendingReviews: 0,
+    completedReviews: 0,
+    teamMembers: 0
+  });
+  const [allEvaluations, setAllEvaluations] = useState([]);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -33,15 +40,65 @@ export default function ManagerEvaluationsPage() {
         setLoadingProjects(false);
       }
     };
+    
+    const fetchDashboardStats = async () => {
+      try {
+        const stats = await getManagerDashboard();
+        setDashboardStats(stats || {});
+      } catch (_) {
+        // Keep default values on error
+      }
+    };
+
+    const fetchEvaluations = async () => {
+      try {
+        const evaluations = await getEvaluations();
+        setAllEvaluations(evaluations || []);
+      } catch (_) {
+        setAllEvaluations([]);
+      }
+    };
+    
     fetchProjects();
+    fetchDashboardStats();
+    fetchEvaluations();
   }, [currentUser]);
-  
-  const toggleProject = (id) => {
-    setSelectedProjectIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+
+  // Calculate filtered stats based on selected project
+  const filteredStats = React.useMemo(() => {
+    if (selectedProjectId === null) {
+      // Show all evaluations when "All" is selected
+      return dashboardStats;
+    }
+
+    // Filter evaluations by selected project ID
+    const filteredEvaluations = allEvaluations.filter(evaluation => 
+      evaluation.projectId === selectedProjectId
     );
+
+    const pending = filteredEvaluations.filter(e => 
+      e.status === 'PENDING'
+    ).length;
+
+    const completed = filteredEvaluations.filter(e => 
+      e.status === 'COMPLETED' || e.status === 'REVIEWED'
+    ).length;
+
+    const teamMembers = new Set(
+      filteredEvaluations.map(e => e.employeeName).filter(name => name)
+    ).size;
+
+    return {
+      pendingReviews: pending,
+      completedReviews: completed,
+      teamMembers: teamMembers
+    };
+  }, [selectedProjectId, dashboardStats, allEvaluations]);
+  
+  const selectProject = (id) => {
+    setSelectedProjectId(id);
   };
-  const clearProjects = () => setSelectedProjectIds([]);
+  const selectAll = () => setSelectedProjectId(null);
 
   return (
     <ManagerLayout>
@@ -69,9 +126,9 @@ export default function ManagerEvaluationsPage() {
             ) : (
               <>
                 <button
-                  onClick={clearProjects}
+                  onClick={selectAll}
                   className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                    selectedProjectIds.length === 0
+                    selectedProjectId === null
                       ? 'bg-[#002035] text-white border-[#002035]'
                       : 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100'
                   }`}
@@ -79,17 +136,17 @@ export default function ManagerEvaluationsPage() {
                   All
                 </button>
                 {projects.map((p) => {
-                  const active = selectedProjectIds.includes(p.id);
+                  const active = selectedProjectId === p.id;
                   return (
                     <button
                       key={p.id}
-                      onClick={() => toggleProject(p.id)}
+                      onClick={() => selectProject(p.id)}
                       className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                         active
                           ? 'bg-[#002035] text-white border-[#002035]'
                           : 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100'
                       }`}
-                      title={active ? 'Click to remove filter' : 'Click to filter by this project'}
+                      title={`Filter by ${p.name} project`}
                     >
                       {p.name}
                     </button>
@@ -109,7 +166,7 @@ export default function ManagerEvaluationsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Total Evaluations</p>
-                <p className="text-2xl font-bold text-gray-900">0</p>
+                <p className="text-2xl font-bold text-gray-900">{(filteredStats.pendingReviews || 0) + (filteredStats.completedReviews || 0)}</p>
               </div>
             </div>
           </div>
@@ -121,7 +178,7 @@ export default function ManagerEvaluationsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Pending Review</p>
-                <p className="text-2xl font-bold text-gray-900">0</p>
+                <p className="text-2xl font-bold text-gray-900">{filteredStats.pendingReviews || 0}</p>
               </div>
             </div>
           </div>
@@ -133,7 +190,7 @@ export default function ManagerEvaluationsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Team Members</p>
-                <p className="text-2xl font-bold text-gray-900">0</p>
+                <p className="text-2xl font-bold text-gray-900">{filteredStats.teamMembers || 0}</p>
               </div>
             </div>
           </div>
@@ -141,7 +198,7 @@ export default function ManagerEvaluationsPage() {
 
         {/* Evaluations Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <ScoreBasedEvaluationTable selectedProjectIds={selectedProjectIds} />
+          <ScoreBasedEvaluationTable selectedProjectIds={selectedProjectId ? [selectedProjectId] : []} />
         </div>
       </div>
     </ManagerLayout>
