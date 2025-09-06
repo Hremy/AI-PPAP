@@ -29,6 +29,7 @@ import ManagerEvaluationsPage from './pages/manager/EvaluationsPage';
 import ManagerLayout from './pages/manager/ManagerLayout';
 import ManagerDashboard from './pages/manager/ManagerDashboard';
 import ManagerProfile from './pages/manager/ManagerProfile';
+import ManagerSetPassword from './pages/manager/ManagerSetPassword';
 import ManagerAnalytics from './pages/manager/ManagerAnalytics';
 import ManagerTeam from './pages/manager/ManagerTeam';
 import Features from './pages/public/Features';
@@ -63,8 +64,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
-          <ErrorBoundary>
-            <RoleBasedRouteGuard>
+          <RoleBasedRouteGuard>
+            <ErrorBoundary>
               <div className="App">
                 <Toaster position="top-right" />
             <Routes>
@@ -174,6 +175,14 @@ function App() {
                                 </ProtectedRoute>
                               }
                             />
+            <Route 
+              path="/manager/set-password" 
+              element={
+                <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
+                  <ManagerSetPassword />
+                </ProtectedRoute>
+              } 
+            />
             <Route 
               path="/manager/evaluations" 
               element={
@@ -287,8 +296,8 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
               </div>
-            </RoleBasedRouteGuard>
-          </ErrorBoundary>
+            </ErrorBoundary>
+          </RoleBasedRouteGuard>
         </AuthProvider>
       </Router>
       <ReactQueryDevtools initialIsOpen={false} />

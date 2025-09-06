@@ -29,6 +29,9 @@ export const AuthProvider = ({ children }) => {
         setCurrentUser(userData);
         // Store user data for API interceptor
         localStorage.setItem('user', JSON.stringify(userData));
+        
+        // Fetch updated profile data to get latest information
+        fetchLatestProfileData(userData);
       } catch (error) {
         console.error('Error decoding token:', error);
         removeAuthToken();
@@ -36,6 +39,35 @@ export const AuthProvider = ({ children }) => {
     }
     setLoading(false);
   }, []);
+
+  const fetchLatestProfileData = async (baseUserData) => {
+    try {
+      const response = await fetch('http://localhost:8084/api/v1/users/profile', {
+        headers: {
+          'Authorization': `Bearer ${getAuthToken()}`,
+          'X-User': baseUserData.username || baseUserData.email || '',
+          'X-Roles': (baseUserData.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',')
+        }
+      });
+      
+      if (response.ok) {
+        const profileData = await response.json();
+        const updatedUserData = {
+          ...baseUserData,
+          firstName: profileData.firstName || baseUserData.firstName,
+          lastName: profileData.lastName || baseUserData.lastName,
+          department: profileData.department || baseUserData.department,
+          position: profileData.position || baseUserData.position,
+          phone: profileData.phone
+        };
+        setCurrentUser(updatedUserData);
+        localStorage.setItem('user', JSON.stringify(updatedUserData));
+      }
+    } catch (error) {
+      console.error('Error fetching latest profile data:', error);
+      // Continue with base user data if profile fetch fails
+    }
+  };
 
   const login = (token) => {
     const decoded = jwtDecode(token);
@@ -53,6 +85,9 @@ export const AuthProvider = ({ children }) => {
     setCurrentUser(userData);
     // Store user data for API interceptor
     localStorage.setItem('user', JSON.stringify(userData));
+    
+    // Fetch updated profile data after login
+    fetchLatestProfileData(userData);
   };
 
   const logout = async () => {
@@ -80,10 +115,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (updatedUserData) => {
-    setCurrentUser(prevUser => ({
-      ...prevUser,
+    const newUserData = {
+      ...currentUser,
       ...updatedUserData
-    }));
+    };
+    setCurrentUser(newUserData);
+    localStorage.setItem('user', JSON.stringify(newUserData));
   };
 
   const value = {

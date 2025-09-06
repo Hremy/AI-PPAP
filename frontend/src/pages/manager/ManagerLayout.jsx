@@ -5,8 +5,7 @@ import {
   HomeIcon, 
   ChartBarIcon, 
   DocumentTextIcon, 
-  UserIcon,
-  ArrowLeftIcon
+  UserIcon
 } from '@heroicons/react/24/outline';
 
 const ManagerLayout = ({ children }) => {
@@ -63,16 +62,7 @@ const ManagerLayout = ({ children }) => {
                 </ul>
               </li>
 
-              {/* Return to Homepage */}
-              <li className="mt-auto">
-                <Link
-                  to="/"
-                  className="group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-                >
-                  <ArrowLeftIcon className="h-6 w-6 shrink-0" />
-                  Return to Homepage
-                </Link>
-              </li>
+              
             </ul>
           </nav>
 

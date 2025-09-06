@@ -1,13 +1,9 @@
 package com.ai.pat.backend.dto;
 
 import com.ai.pat.backend.model.Evaluation;
-import com.ai.pat.backend.util.CompetencyNormalizer;
-import lombok.Data;
-
 import java.time.LocalDateTime;
 import java.util.Map;
 
-@Data
 public class EvaluationDTO {
     private Long id;
     private Long employeeId;
@@ -44,6 +40,68 @@ public class EvaluationDTO {
     // Timeline
     private Integer evaluationYear;
     private Integer evaluationMonth; // 1-based month; quarters are derived on the frontend
+
+    // Getters
+    public Long getId() { return id; }
+    public Long getEmployeeId() { return employeeId; }
+    public String getEmployeeName() { return employeeName; }
+    public String getEmployeeEmail() { return employeeEmail; }
+    public Long getProjectId() { return projectId; }
+    public String getProjectName() { return projectName; }
+    public Long getReviewerId() { return reviewerId; }
+    public String getReviewerName() { return reviewerName; }
+    public Integer getOverallRating() { return overallRating; }
+    public Map<String, Integer> getCompetencyRatings() { return competencyRatings; }
+    public String getAchievements() { return achievements; }
+    public String getChallenges() { return challenges; }
+    public String getLearnings() { return learnings; }
+    public String getNextPeriodGoals() { return nextPeriodGoals; }
+    public String getAdditionalFeedback() { return additionalFeedback; }
+    public String getManagerFeedbackRequest() { return managerFeedbackRequest; }
+    public Integer getManagerRating() { return managerRating; }
+    public String getManagerFeedback() { return managerFeedback; }
+    public String getRecommendations() { return recommendations; }
+    public Map<String, Integer> getManagerCompetencyRatings() { return managerCompetencyRatings; }
+    public LocalDateTime getReviewedAt() { return reviewedAt; }
+    public Evaluation.EvaluationStatus getStatus() { return status; }
+    public LocalDateTime getSubmittedAt() { return submittedAt; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Map<String, Integer> getRatings() { return ratings; }
+    public String getFeedback() { return feedback; }
+    public Integer getEvaluationYear() { return evaluationYear; }
+    public Integer getEvaluationMonth() { return evaluationMonth; }
+
+    // Setters
+    public void setId(Long id) { this.id = id; }
+    public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
+    public void setEmployeeName(String employeeName) { this.employeeName = employeeName; }
+    public void setEmployeeEmail(String employeeEmail) { this.employeeEmail = employeeEmail; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public void setProjectName(String projectName) { this.projectName = projectName; }
+    public void setReviewerId(Long reviewerId) { this.reviewerId = reviewerId; }
+    public void setReviewerName(String reviewerName) { this.reviewerName = reviewerName; }
+    public void setOverallRating(Integer overallRating) { this.overallRating = overallRating; }
+    public void setCompetencyRatings(Map<String, Integer> competencyRatings) { this.competencyRatings = competencyRatings; }
+    public void setAchievements(String achievements) { this.achievements = achievements; }
+    public void setChallenges(String challenges) { this.challenges = challenges; }
+    public void setLearnings(String learnings) { this.learnings = learnings; }
+    public void setNextPeriodGoals(String nextPeriodGoals) { this.nextPeriodGoals = nextPeriodGoals; }
+    public void setAdditionalFeedback(String additionalFeedback) { this.additionalFeedback = additionalFeedback; }
+    public void setManagerFeedbackRequest(String managerFeedbackRequest) { this.managerFeedbackRequest = managerFeedbackRequest; }
+    public void setManagerRating(Integer managerRating) { this.managerRating = managerRating; }
+    public void setManagerFeedback(String managerFeedback) { this.managerFeedback = managerFeedback; }
+    public void setRecommendations(String recommendations) { this.recommendations = recommendations; }
+    public void setManagerCompetencyRatings(Map<String, Integer> managerCompetencyRatings) { this.managerCompetencyRatings = managerCompetencyRatings; }
+    public void setReviewedAt(LocalDateTime reviewedAt) { this.reviewedAt = reviewedAt; }
+    public void setStatus(Evaluation.EvaluationStatus status) { this.status = status; }
+    public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public void setRatings(Map<String, Integer> ratings) { this.ratings = ratings; }
+    public void setFeedback(String feedback) { this.feedback = feedback; }
+    public void setEvaluationYear(Integer evaluationYear) { this.evaluationYear = evaluationYear; }
+    public void setEvaluationMonth(Integer evaluationMonth) { this.evaluationMonth = evaluationMonth; }
 
     public static EvaluationDTO fromEntity(Evaluation evaluation) {
         EvaluationDTO dto = new EvaluationDTO();
@@ -102,8 +160,7 @@ public class EvaluationDTO {
         }
         
         dto.setOverallRating(evaluation.getOverallRating());
-        // Normalize competency maps to canonical keys for consistent frontend display
-        dto.setCompetencyRatings(CompetencyNormalizer.normalize(evaluation.getCompetencyRatings()));
+        dto.setCompetencyRatings(evaluation.getCompetencyRatings());
         dto.setAchievements(evaluation.getAchievements());
         dto.setChallenges(evaluation.getChallenges());
         dto.setLearnings(evaluation.getLearnings());
@@ -115,11 +172,11 @@ public class EvaluationDTO {
         dto.setManagerRating(evaluation.getManagerRating());
         dto.setManagerFeedback(evaluation.getManagerFeedback());
         dto.setRecommendations(evaluation.getRecommendations());
-        dto.setManagerCompetencyRatings(CompetencyNormalizer.normalize(evaluation.getManagerCompetencyRatings()));
+        dto.setManagerCompetencyRatings(evaluation.getManagerCompetencyRatings());
         dto.setReviewedAt(evaluation.getReviewedAt());
         
         // Legacy support
-        dto.setRatings(CompetencyNormalizer.normalize(evaluation.getCompetencyRatings()));
+        dto.setRatings(evaluation.getCompetencyRatings());
         dto.setFeedback(evaluation.getAdditionalFeedback());
         
         dto.setStatus(evaluation.getStatus());

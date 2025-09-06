@@ -298,12 +298,32 @@ public class EvaluationController {
             }
         } catch (Exception ignore) {}
 
+        // Duplicate guard: if an evaluation already exists for (employee, project, quarter), return 409 with a friendly message and the existing evaluation
+        Integer yy = evaluationDTO.getEvaluationYear();
+        Integer mm = evaluationDTO.getEvaluationMonth();
+        if (employeeId != null && projectId != null && yy != null && mm != null) {
+            boolean exists = evaluationRepository.existsByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonth(
+                    employeeId, projectId, yy, mm
+            );
+            if (exists) {
+                var existing = evaluationRepository
+                        .findFirstByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonthOrderByCreatedAtDesc(employeeId, projectId, yy, mm)
+                        .map(EvaluationDTO::fromEntity)
+                        .orElse(null);
+                // Wrap as 409 with body via ResponseEntity.status
+                org.springframework.http.ResponseEntity.BodyBuilder bb = org.springframework.http.ResponseEntity.status(409);
+                if (existing != null) {
+                    // Use a header to convey message (UI can also read body if needed)
+                    return bb.body(existing);
+                }
+                return bb.body(null);
+            }
+        }
+
         try {
             EvaluationDTO createdEvaluation = evaluationService.createEvaluation(evaluationDTO, employeeId, reviewerId, projectId);
             if (createdEvaluation != null) return ResponseEntity.ok(createdEvaluation);
             // Fallback: service returned null in idempotent path; try to resolve existing and return it
-            Integer yy = evaluationDTO.getEvaluationYear();
-            Integer mm = evaluationDTO.getEvaluationMonth();
             if (employeeId != null && projectId != null && yy != null && mm != null) {
                 var existing = evaluationRepository
                         .findFirstByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonthOrderByCreatedAtDesc(employeeId, projectId, yy, mm)
@@ -313,20 +333,63 @@ public class EvaluationController {
             }
             return ResponseEntity.ok(createdEvaluation); // will be null but shouldn't happen
         } catch (IllegalArgumentException iae) {
-            // If duplicate, return existing instead of 400
-            String msg = iae.getMessage() == null ? "" : iae.getMessage().toLowerCase();
-            if (msg.contains("already") && msg.contains("quarter")) {
-                Integer yy = evaluationDTO.getEvaluationYear();
-                Integer mm = evaluationDTO.getEvaluationMonth();
-                if (employeeId != null && projectId != null && yy != null && mm != null) {
-                    var existing = evaluationRepository
-                            .findFirstByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonthOrderByCreatedAtDesc(employeeId, projectId, yy, mm)
-                            .map(EvaluationDTO::fromEntity)
-                            .orElse(null);
-                    if (existing != null) return ResponseEntity.ok(existing);
+            return ResponseEntity.badRequest().body(null);
+        }
+    }
+
+    // Pre-submit duplicate check endpoint so UI can warn early
+    @GetMapping("/self/check")
+    public ResponseEntity<Map<String, Object>> checkSelfEvaluationExists(
+            @RequestParam("projectId") Long projectId,
+            @RequestParam("evaluationYear") Integer evaluationYear,
+            @RequestParam("evaluationQuarter") Integer evaluationQuarter,
+            @RequestHeader(value = "X-User", required = false) String xUser) {
+        try {
+            // Resolve employeeId
+            Long employeeId = null;
+            String key = xUser;
+            if (key == null || key.isBlank()) {
+                var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated() && auth.getName() != null && !auth.getName().isBlank()) {
+                    key = auth.getName();
                 }
             }
-            return ResponseEntity.badRequest().body(null);
+            if (key != null && !key.isBlank()) {
+                final String finalKey = key;
+                employeeId = userRepository.findByUsername(finalKey)
+                        .or(() -> userRepository.findByEmail(finalKey))
+                        .map(com.ai.pat.backend.model.User::getId)
+                        .orElse(null);
+            }
+            if (employeeId == null || projectId == null || evaluationYear == null || evaluationQuarter == null) {
+                return ResponseEntity.badRequest().body(java.util.Map.of(
+                        "success", false,
+                        "message", "Missing required parameters"
+                ));
+            }
+            int month = switch (evaluationQuarter) { case 1 -> 1; case 2 -> 4; case 3 -> 7; default -> 10; };
+            boolean exists = evaluationRepository.existsByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonth(
+                    employeeId, projectId, evaluationYear, month
+            );
+            java.util.Map<String, Object> resp = new java.util.HashMap<>();
+            resp.put("exists", exists);
+            if (exists) {
+                var existing = evaluationRepository
+                        .findFirstByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonthOrderByCreatedAtDesc(employeeId, projectId, evaluationYear, month)
+                        .map(EvaluationDTO::fromEntity)
+                        .orElse(null);
+                if (existing != null) {
+                    resp.put("evaluationId", existing.getId());
+                    resp.put("status", existing.getStatus());
+                    resp.put("submittedAt", existing.getSubmittedAt());
+                }
+            }
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of(
+                    "success", false,
+                    "message", e.getMessage()
+            ));
         }
     }
     
@@ -604,57 +667,5 @@ public class EvaluationController {
         }
     }
 
-    @PostMapping("/{evaluationId}/manager-score")
-    public ResponseEntity<Map<String, Object>> submitManagerScore(
-            @PathVariable("evaluationId") Long evaluationId,
-            @RequestBody Map<String, Object> scoreData) {
-        try {
-            // Basic request logging
-            System.out.println("[submitManagerScore] evaluationId=" + evaluationId + ", payload=" + scoreData);
-
-            String competency = (String) scoreData.get("competency");
-            Integer score = (Integer) scoreData.get("score");
-            
-            if (competency == null || score == null) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Competency and score are required"
-                ));
-            }
-            
-            if (score < 1 || score > 5) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Score must be between 1 and 5"
-                ));
-            }
-            
-            // For now, use hardcoded manager ID - in production this would come from JWT
-            Long managerId = 1L;
-            
-            EvaluationDTO updatedEvaluation;
-            
-            // Handle overall rating vs competency rating
-            if ("overall".equals(competency)) {
-                updatedEvaluation = evaluationService.updateManagerOverallRating(evaluationId, managerId, score);
-            } else {
-                updatedEvaluation = evaluationService.updateManagerCompetencyScore(
-                    evaluationId, managerId, competency, score);
-            }
-            
-            // Return only minimal info to avoid any serialization edge cases
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Manager score updated successfully",
-                "evaluationId", updatedEvaluation.getId()
-            ));
-        } catch (Exception e) {
-            System.err.println("[submitManagerScore][ERROR] " + e.getClass().getName() + ": " + e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "message", "Failed to update manager score: " + e.getMessage()
-            ));
-        }
-    }
 
 }

@@ -89,14 +89,17 @@ public class AdminController {
             counter++;
         }
 
-        User manager = User.builder()
-            .username(finalUsername)
-            .email(request.email())
-            .firstName(request.firstName())
-            .lastName(request.lastName())
-            .password(passwordEncoder.encode(generatedPassword))
-            .roles(Set.of("ROLE_MANAGER"))
-            .build();
+        User manager = new User();
+        manager.setUsername(finalUsername);
+        manager.setEmail(request.email());
+        manager.setFirstName(request.firstName());
+        manager.setLastName(request.lastName());
+        manager.setPassword(passwordEncoder.encode(generatedPassword));
+        // Include a role flag to force password change at first login
+        manager.setRoles(new java.util.HashSet<>(java.util.Arrays.asList("ROLE_MANAGER", "FORCE_PASSWORD_CHANGE")));
+        // Set default department and position for new managers
+        manager.setDepartment("Management");
+        manager.setPosition("Manager");
 
         User savedManager = userRepository.save(manager);
 
@@ -134,6 +137,33 @@ public class AdminController {
             "message", "Password reset successfully",
             "newPassword", newPassword
         ));
+    }
+
+    @DeleteMapping("/managers/{managerId}")
+    public ResponseEntity<Map<String, Object>> deleteManager(@PathVariable Long managerId) {
+        Optional<User> userOpt = userRepository.findById(managerId);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        User user = userOpt.get();
+        if (user.getRoles() == null || !user.getRoles().contains("ROLE_MANAGER")) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "User is not a manager"
+            ));
+        }
+        try {
+            userRepository.delete(user);
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Manager deleted successfully"
+            ));
+        } catch (Exception ex) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "Failed to delete manager: " + ex.getMessage()
+            ));
+        }
     }
 
     private Map<String, Object> convertToManagerResponse(User manager) {

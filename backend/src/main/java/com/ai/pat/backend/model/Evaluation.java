@@ -31,9 +31,6 @@ public class Evaluation {
     @Column(nullable = false)
     private Integer overallRating;
     
-    @Column(nullable = false)
-    private Integer overallRating;
-    
     @ElementCollection
     @CollectionTable(name = "evaluation_ratings", 
         joinColumns = @JoinColumn(name = "evaluation_id"))
