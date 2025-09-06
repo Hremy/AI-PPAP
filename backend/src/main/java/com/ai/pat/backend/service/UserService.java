@@ -106,23 +106,23 @@ public class UserService {
 
         Set<Project> projects = new HashSet<>(projectRepository.findAllById(projectIds));
 
-        // Enforce uniqueness: each project can only have ONE manager
+        // Enforce uniqueness STRICTLY: if any selected project is already managed by a different manager, reject
+        java.util.List<String> conflicts = new java.util.ArrayList<>();
         for (Project p : projects) {
             if (p == null || p.getId() == null) continue;
-            // Find all managers currently managing this project
             List<User> currentManagers = userRepository.findManagersByManagedProjectIds(java.util.List.of(p.getId()));
             for (User m : currentManagers) {
                 if (m == null || m.getId() == null) continue;
-                if (m.getId().equals(managerId)) continue; // keep assigning to target manager
-                if (m.getManagedProjects() != null && !m.getManagedProjects().isEmpty()) {
-                    // Remove this project from other managers
-                    m.getManagedProjects().removeIf(mp -> mp != null && p.getId().equals(mp.getId()));
-                    userRepository.save(m);
+                if (!m.getId().equals(managerId)) {
+                    conflicts.add(p.getName() == null ? ("Project#" + p.getId()) : p.getName());
                 }
             }
         }
+        if (!conflicts.isEmpty()) {
+            throw new IllegalArgumentException("Cannot assign projects already managed by another manager: " + String.join(", ", conflicts));
+        }
 
-        // Assign the projects uniquely to the target manager
+        // Assign the projects to the target manager
         manager.setManagedProjects(projects);
         return userRepository.save(manager);
     }
@@ -176,9 +176,29 @@ public class UserService {
                         email = usernameOrEmail + "@example.com";
                     }
 
+                    // Extract first and last name from username/email
+                    String firstName = null;
+                    String lastName = null;
+                    
+                    // Try to parse name from username (e.g., "john.doe" -> "John Doe")
+                    if (username != null && username.contains(".")) {
+                        String[] nameParts = username.split("\\.", 2);
+                        if (nameParts.length >= 2) {
+                            firstName = capitalize(nameParts[0]);
+                            lastName = capitalize(nameParts[1]);
+                        }
+                    }
+                    
+                    // If no name parts found, use username as first name
+                    if (firstName == null && username != null && !username.isBlank()) {
+                        firstName = capitalize(username);
+                    }
+
                     User u = User.builder()
                             .username(username)
                             .email(email)
+                            .firstName(firstName)
+                            .lastName(lastName)
                             .password(passwordEncoder.encode("changeme"))
                             .build();
                     // Ensure EMPLOYEE role
@@ -199,5 +219,42 @@ public class UserService {
         if (usernameOrEmail == null || usernameOrEmail.isBlank()) return null;
         User u = getOrCreateUserByUsernameOrEmail(usernameOrEmail);
         return u != null ? u.getId() : null;
+    }
+    
+    @Transactional
+    public void updateMissingUserNames() {
+        List<User> usersWithoutNames = userRepository.findAll().stream()
+            .filter(user -> (user.getFirstName() == null || user.getFirstName().isBlank()) 
+                         && (user.getLastName() == null || user.getLastName().isBlank()))
+            .toList();
+            
+        for (User user : usersWithoutNames) {
+            String username = user.getUsername();
+            String firstName = null;
+            String lastName = null;
+            
+            // Try to parse name from username (e.g., "john.doe" -> "John Doe")
+            if (username != null && username.contains(".")) {
+                String[] nameParts = username.split("\\.", 2);
+                if (nameParts.length >= 2) {
+                    firstName = capitalize(nameParts[0]);
+                    lastName = capitalize(nameParts[1]);
+                }
+            }
+            
+            // If no name parts found, use username as first name
+            if (firstName == null && username != null && !username.isBlank()) {
+                firstName = capitalize(username);
+            }
+            
+            user.setFirstName(firstName);
+            user.setLastName(lastName);
+            userRepository.save(user);
+        }
+    }
+    
+    private String capitalize(String str) {
+        if (str == null || str.isEmpty()) return str;
+        return str.substring(0, 1).toUpperCase() + str.substring(1).toLowerCase();
     }
 }

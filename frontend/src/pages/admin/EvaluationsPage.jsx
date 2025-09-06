@@ -26,24 +26,20 @@ export default function EvaluationsPage() {
         {/* Project Filter */}
         <div className="bg-white rounded-lg shadow-sm border mb-4 p-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <label className="text-sm font-medium text-secondary/80">Filter by Project(s):</label>
+            <label className="text-sm font-medium text-secondary/80">Filter by Project:</label>
             <select
-              multiple
-              className="px-3 py-2 border rounded-md text-sm min-w-[240px] h-28"
-              value={selectedIds.map(String)}
+              className="px-3 py-2 border rounded-md text-sm min-w-[240px]"
+              value={selectedIds[0] || ''}
               onChange={(e) => {
-                const options = Array.from(e.target.selectedOptions);
-                const ids = options.map(o => Number(o.value));
-                setSelectedIds(ids);
+                const val = e.target.value;
+                setSelectedIds(val ? [Number(val)] : []);
               }}
             >
+              <option value="">All Projects</option>
               {projectOptions.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-            {selectedIds.length > 0 && (
-              <span className="text-xs text-secondary/60">{selectedIds.length} selected</span>
-            )}
           </div>
         </div>
 

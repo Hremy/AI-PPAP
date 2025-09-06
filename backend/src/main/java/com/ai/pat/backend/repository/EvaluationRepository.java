@@ -52,4 +52,6 @@ public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
             Integer evaluationYear,
             Integer evaluationMonth
     );
+
+    java.util.List<Evaluation> findByEmployeeEmail(String employeeEmail);
 }

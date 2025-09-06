@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { draftEvaluation as draftEval } from '../../services/aiService';
@@ -46,49 +46,35 @@ const SimplifiedEvaluationForm = () => {
   const [selectedYear, setSelectedYear] = useState(defaultYear);
   const [selectedQuarter, setSelectedQuarter] = useState(defaultQuarter);
 
-  // Competencies for rating
-  const competencies = [
-    {
-      id: 'technical_skills',
-      name: 'Technical Skills',
-      description: 'Proficiency in job-related technical competencies'
-    },
-    {
-      id: 'communication',
-      name: 'Communication',
-      description: 'Ability to communicate effectively with team and stakeholders'
-    },
-    {
-      id: 'problem_solving',
-      name: 'Problem Solving',
-      description: 'Capability to analyze and solve complex problems'
-    },
-    {
-      id: 'teamwork',
-      name: 'Teamwork',
-      description: 'Collaboration and working effectively with others'
-    },
-    {
-      id: 'leadership',
-      name: 'Leadership',
-      description: 'Leading initiatives and guiding team members'
-    },
-    {
-      id: 'adaptability',
-      name: 'Adaptability',
-      description: 'Flexibility and ability to adapt to changes'
-    },
-    {
-      id: 'time_management',
-      name: 'Time Management',
-      description: 'Efficiently managing time and meeting deadlines'
-    },
-    {
-      id: 'quality_focus',
-      name: 'Quality Focus',
-      description: 'Commitment to delivering high-quality work'
+  // Load KEQs and derive dynamic competencies (effective from selected Year/Quarter)
+  const { data: keqs = [], isLoading: keqsLoading } = useQuery({
+    queryKey: ['keqs','all'],
+    queryFn: async () => {
+      try {
+        const { getKEQs } = await import('../../lib/api');
+        return await getKEQs();
+      } catch {
+        return [];
+      }
     }
-  ];
+  });
+
+  const isEffective = (k, year, quarter) => {
+    if (!k) return false;
+    if (k.isActive === false) return false;
+    if (!k.effectiveFromYear || !k.effectiveFromQuarter) return true;
+    if (k.effectiveFromYear < year) return true;
+    if (k.effectiveFromYear === year && k.effectiveFromQuarter <= quarter) return true;
+    return false;
+  };
+
+  const snake = (s) => s?.toString()?.trim()?.toLowerCase()?.replace(/[^a-z0-9]+/g, '_')?.replace(/^_+|_+$/g, '') || '';
+  const dynamicCompetencies = useMemo(() => {
+    return (keqs || [])
+      .filter(k => isEffective(k, selectedYear, selectedQuarter))
+      .sort((a,b)=> (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+      .map(k => ({ id: snake(k.category), name: k.category, description: k.description || '' }));
+  }, [keqs, selectedYear, selectedQuarter]);
 
   // Submit evaluation mutation
   const submitMutation = useMutation({
@@ -160,11 +146,20 @@ const SimplifiedEvaluationForm = () => {
     }
     
     // Prepare submission data
+    // Build competencyRatings with KEQ text keys (title-case) so backend normalizer handles them
+    const competencyRatings = Object.fromEntries(
+      Object.entries(formData.competencies || {}).map(([id, score]) => {
+        const comp = dynamicCompetencies.find(c => c.id === id);
+        const titleKey = comp?.name || id;
+        return [titleKey, score];
+      })
+    );
+
     const submissionData = {
       employeeName: `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'Employee',
       employeeEmail: currentUser?.email || 'employee@company.com',
       overallRating: formData.overallRating,
-      competencyRatings: formData.competencies,
+      competencyRatings,
       projectId: Number(selectedProjectId),
       evaluationYear: selectedYear,
       evaluationQuarter: selectedQuarter,
@@ -365,14 +360,14 @@ const SimplifiedEvaluationForm = () => {
             </div>
           </div>
 
-          {/* Competency Ratings */}
+          {/* Competency Ratings (from KEQs) */}
           <div className="bg-white rounded-2xl shadow-lg p-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
               <CheckCircleIcon className="w-6 h-6 mr-2 text-primary" />
               Competency Ratings
             </h2>
             <div className="space-y-6">
-              {competencies.map((competency) => (
+              {(keqsLoading ? [] : dynamicCompetencies).map((competency) => (
                 <div key={competency.id} className="bg-gray-50 rounded-xl p-6">
                   <div className="mb-4">
                     <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -388,6 +383,9 @@ const SimplifiedEvaluationForm = () => {
                   )}
                 </div>
               ))}
+              {!keqsLoading && dynamicCompetencies.length === 0 && (
+                <p className="text-sm text-gray-500">No KEQs are effective for Q{selectedQuarter} {selectedYear}. Adjust the Timeline above.</p>
+              )}
             </div>
           </div>
 

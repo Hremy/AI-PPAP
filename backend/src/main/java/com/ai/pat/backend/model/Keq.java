@@ -19,15 +19,15 @@ public class Keq {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 2000)
-    private String text;
-
-    @Column
+    @Column(nullable = false, length = 200)
     private String category;
+
+    @Column(length = 2000)
+    private String description;
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer orderIndex = 0;
+    private Integer orderIndex = 1;
 
     @Column
     private Integer effectiveFromYear; // first year when this applies

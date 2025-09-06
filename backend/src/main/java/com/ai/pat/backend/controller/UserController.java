@@ -30,6 +30,13 @@ public class UserController {
 
     private final UserService userService;
 
+    @PostMapping("/admin/update-missing-names")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> updateMissingUserNames() {
+        userService.updateMissingUserNames();
+        return ResponseEntity.ok(Map.of("message", "User names updated successfully"));
+    }
+
     @PostMapping("/managers")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UserSummaryDTO> createManager(
