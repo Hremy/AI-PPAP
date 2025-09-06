@@ -3,13 +3,16 @@ package com.ai.pat.backend.service;
 import com.ai.pat.backend.dto.EvaluationDTO;
 import com.ai.pat.backend.exception.ResourceNotFoundException;
 import com.ai.pat.backend.model.Evaluation;
+import com.ai.pat.backend.model.Project;
 import com.ai.pat.backend.model.User;
 import com.ai.pat.backend.repository.EvaluationRepository;
+import com.ai.pat.backend.repository.ProjectRepository;
 import com.ai.pat.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -25,9 +28,10 @@ public class EvaluationService {
 
     private final EvaluationRepository evaluationRepository;
     private final UserRepository userRepository;
+    private final ProjectRepository projectRepository;
 
     @Transactional
-    public EvaluationDTO createEvaluation(EvaluationDTO evaluationDTO, Long employeeId, Long reviewerId) {
+    public EvaluationDTO createEvaluation(EvaluationDTO evaluationDTO, Long employeeId, Long reviewerId, Long projectId) {
         // Try to find the employee, but don't fail if not found (for demo purposes)
         User employee = null;
         User reviewer = null;
@@ -49,6 +53,27 @@ public class EvaluationService {
         Evaluation evaluation = new Evaluation();
         evaluation.setEmployee(employee);
         evaluation.setReviewer(reviewer);
+        // Optional project association with validation that employee belongs to the project
+        if (projectId != null) {
+            try {
+                Optional<Project> opt = projectRepository.findById(projectId);
+                if (opt.isPresent()) {
+                    Project project = opt.get();
+                    // Validate only if we resolved an employee successfully
+                    if (employee != null && employee.getProjects() != null && !employee.getProjects().isEmpty()) {
+                        boolean isMember = employee.getProjects().stream().anyMatch(p -> p != null && project.getId().equals(p.getId()));
+                        if (!isMember) {
+                            throw new IllegalArgumentException("Selected project does not belong to the employee");
+                        }
+                    }
+                    evaluation.setProject(project);
+                }
+            } catch (IllegalArgumentException ex) {
+                throw ex;
+            } catch (Exception e) {
+                // Ignore if project lookup fails (demo resilience)
+            }
+        }
         // Persist competency ratings first
         evaluation.setCompetencyRatings(evaluationDTO.getCompetencyRatings());
         // Auto-calculate overall rating from competency ratings (average of values, rounded)
@@ -72,9 +97,70 @@ public class EvaluationService {
         }
         evaluation.setOverallRating(computedOverall);
         
-        // Use the provided employee name and email from the form (not from database)
-        evaluation.setEmployeeName(evaluationDTO.getEmployeeName());
-        evaluation.setEmployeeEmail(evaluationDTO.getEmployeeEmail());
+        // Prefer provided name/email; fallback to linked employee entity if missing to avoid 'Unknown Employee'
+        String formName = evaluationDTO.getEmployeeName();
+        String formEmail = evaluationDTO.getEmployeeEmail();
+        if (formName == null || formName.isBlank()) {
+            if (employee != null) {
+                String fn = employee.getFirstName() != null ? employee.getFirstName() : "";
+                String ln = employee.getLastName() != null ? employee.getLastName() : "";
+                formName = (fn + " " + ln).trim();
+                if (formName.isBlank()) {
+                    // fallback to username or email local-part
+                    String uname = employee.getUsername();
+                    if (uname != null && !uname.isBlank()) {
+                        formName = uname.replace('.', ' ');
+                    }
+                    if ((formName == null || formName.isBlank()) && employee.getEmail() != null) {
+                        String local = employee.getEmail().split("@", 2)[0];
+                        formName = local.replace('.', ' ');
+                    }
+                    if (formName != null && !formName.isBlank()) {
+                        // Capitalize words
+                        formName = java.util.Arrays.stream(formName.split("\\s+"))
+                                .filter(s -> !s.isBlank())
+                                .map(s -> s.substring(0,1).toUpperCase() + (s.length()>1 ? s.substring(1) : ""))
+                                .reduce((a,b) -> a + " " + b).orElse(formName);
+                    }
+                }
+            }
+        }
+        if (formEmail == null || formEmail.isBlank()) {
+            if (employee != null) {
+                formEmail = employee.getEmail();
+            }
+        }
+        evaluation.setEmployeeName(formName);
+        evaluation.setEmployeeEmail(formEmail);
+        // Timeline from DTO (if provided)
+        try {
+            if (evaluationDTO.getEvaluationYear() != null) {
+                evaluation.setEvaluationYear(evaluationDTO.getEvaluationYear());
+            }
+            if (evaluationDTO.getEvaluationMonth() != null) {
+                evaluation.setEvaluationMonth(evaluationDTO.getEvaluationMonth());
+            }
+        } catch (Exception ignore) {}
+
+        // Idempotency: if an evaluation already exists for (employee, project, quarter/year), return the existing one
+        try {
+            Long eid = (employee != null && employee.getId() != null) ? employee.getId() : employeeId;
+            Long pid = (evaluation.getProject() != null) ? evaluation.getProject().getId() : projectId;
+            Integer yy = evaluation.getEvaluationYear();
+            Integer mm = evaluation.getEvaluationMonth();
+            if (eid != null && pid != null && yy != null && mm != null) {
+                boolean exists = evaluationRepository.existsByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonth(eid, pid, yy, mm);
+                if (exists) {
+                    return evaluationRepository
+                            .findFirstByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonthOrderByCreatedAtDesc(eid, pid, yy, mm)
+                            .map(EvaluationDTO::fromEntity)
+                            .orElseGet(() -> {
+                                // fallback: continue with normal save if not found by finder
+                                return null;
+                            });
+                }
+            }
+        } catch (Exception ignore) {}
         
         evaluation.setAchievements(evaluationDTO.getAchievements());
         evaluation.setChallenges(evaluationDTO.getChallenges());
@@ -116,6 +202,19 @@ public class EvaluationService {
     }
 
     @Transactional(readOnly = true)
+    public List<EvaluationDTO> getManagerVisibleEvaluations(Long managerId) {
+        User manager = userRepository.findById(managerId)
+                .orElse(null);
+        if (manager == null || manager.getManagedProjects() == null || manager.getManagedProjects().isEmpty()) {
+            return List.of();
+        }
+        List<Project> projects = manager.getManagedProjects().stream().toList();
+        return evaluationRepository.findByEmployeeProjectsOrEvaluationProjectIn(projects).stream()
+                .map(EvaluationDTO::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public List<EvaluationDTO> getDepartmentEvaluations(String department) {
         return evaluationRepository.findByDepartment(department).stream()
                 .map(EvaluationDTO::fromEntity)
@@ -146,6 +245,122 @@ public class EvaluationService {
         
         log.info("Evaluation with id {} deleted successfully", evaluationId);
         evaluationRepository.delete(evaluation);
+    }
+
+    @Transactional
+    public void deleteEvaluationAuthorized(Long evaluationId, Long requesterId, boolean isAdmin) {
+        Evaluation evaluation = evaluationRepository.findById(evaluationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Evaluation not found with id: " + evaluationId));
+        if (!isAdmin) {
+            // Permit deletion for authenticated managers (requesterId present),
+            // without enforcing project membership in this environment.
+            if (requesterId == null) {
+                try {
+                    org.springframework.security.core.Authentication auth =
+                            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                    boolean isManager = auth != null && auth.getAuthorities() != null && auth.getAuthorities().stream()
+                            .anyMatch(a -> "ROLE_MANAGER".equals(a.getAuthority()));
+                    if (!isManager) {
+                        throw new AccessDeniedException("You are not authorized to delete this evaluation");
+                    }
+                } catch (Exception ex) {
+                    throw new AccessDeniedException("You are not authorized to delete this evaluation");
+                }
+            }
+        }
+        evaluationRepository.delete(evaluation);
+        log.info("Evaluation with id {} deleted by {} (admin={})", evaluationId, requesterId, isAdmin);
+    }
+
+    public int createMonthlyEvaluations(Integer month, Integer year) {
+        log.info("Creating monthly evaluations for {}/{}", month, year);
+        
+        // Get all employees (users with ROLE_EMPLOYEE)
+        List<User> employees = userRepository.findAll().stream()
+            .filter(user -> user.getRoles().contains("ROLE_EMPLOYEE"))
+            .collect(Collectors.toList());
+        int createdCount = 0;
+        
+        for (User employee : employees) {
+            // Check if evaluation already exists for this employee in this month/year
+            List<Evaluation> existingEvaluations = evaluationRepository.findByEmployeeId(employee.getId());
+            boolean exists = existingEvaluations.stream()
+                .anyMatch(eval -> month.equals(eval.getEvaluationMonth()) && year.equals(eval.getEvaluationYear()));
+            
+            if (!exists) {
+                Evaluation evaluation = new Evaluation();
+                evaluation.setEmployee(employee);
+                evaluation.setEmployeeName(employee.getFirstName() + " " + employee.getLastName());
+                evaluation.setEmployeeEmail(employee.getEmail());
+                evaluation.setEvaluationMonth(month);
+                evaluation.setEvaluationYear(year);
+                evaluation.setStatus(Evaluation.EvaluationStatus.DRAFT);
+                evaluation.setOverallRating(0); // Default rating
+                
+                evaluationRepository.save(evaluation);
+                createdCount++;
+                
+                log.info("Created evaluation for employee: {} for {}/{}", 
+                    employee.getEmail(), month, year);
+            }
+        }
+        
+        log.info("Created {} monthly evaluations for {}/{}", createdCount, month, year);
+        return createdCount;
+    }
+
+    @Transactional
+    public int backfillEmployeeInfo() {
+        int updated = 0;
+        List<Evaluation> all;
+        try {
+            all = evaluationRepository.findAll();
+        } catch (Exception e) {
+            log.warn("Backfill aborted — could not load evaluations: {}", e.getMessage());
+            return 0;
+        }
+        for (Evaluation eval : all) {
+            boolean needsName = eval.getEmployeeName() == null || eval.getEmployeeName().isBlank();
+            boolean needsEmail = eval.getEmployeeEmail() == null || eval.getEmployeeEmail().isBlank();
+            if (!(needsName || needsEmail)) continue;
+            User emp = eval.getEmployee();
+            if (emp == null) continue;
+            if (needsName) {
+                String fn = emp.getFirstName() != null ? emp.getFirstName() : "";
+                String ln = emp.getLastName() != null ? emp.getLastName() : "";
+                String full = (fn + " " + ln).trim();
+                if (!full.isBlank()) eval.setEmployeeName(full);
+            }
+            if (needsEmail && emp.getEmail() != null && !emp.getEmail().isBlank()) {
+                eval.setEmployeeEmail(emp.getEmail());
+            }
+            try {
+                evaluationRepository.save(eval);
+                updated++;
+            } catch (Exception ex) {
+                log.warn("Failed to backfill evaluation {}: {}", eval.getId(), ex.getMessage());
+            }
+        }
+        log.info("Backfill complete. Updated {} evaluations with missing employee info.", updated);
+        return updated;
+    }
+
+    @Transactional
+    public EvaluationDTO updateManagerOverallRating(Long evaluationId, Long managerId, Integer rating) {
+        Evaluation evaluation = evaluationRepository.findById(evaluationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Evaluation not found with id: " + evaluationId));
+        // Authorization: manager must manage at least one of employee's projects
+        if (!isManagerAuthorizedForEmployee(managerId, evaluation.getEmployee())) {
+            throw new AccessDeniedException("You are not authorized to grade this employee");
+        }
+
+        evaluation.setManagerRating(rating);
+        evaluation.setReviewedAt(LocalDateTime.now());
+        
+        Evaluation savedEvaluation = evaluationRepository.save(evaluation);
+        log.info("Updated manager overall rating for evaluation {} to {}", evaluationId, rating);
+        
+        return EvaluationDTO.fromEntity(savedEvaluation);
     }
 
     public int createMonthlyEvaluations(Integer month, Integer year) {
@@ -279,6 +494,11 @@ public class EvaluationService {
                 log.warn("Could not verify manager existence due to DB issue: {}. Proceeding.", ex.getMessage());
             }
             
+            // Authorization: manager must manage at least one of employee's projects
+            if (!isManagerAuthorizedForEmployee(managerId, evaluation.getEmployee())) {
+                throw new AccessDeniedException("You are not authorized to grade this employee");
+            }
+
             // Initialize the map if null
             if (evaluation.getManagerCompetencyRatings() == null) {
                 log.info("7. Initializing managerCompetencyRatings map");
@@ -292,6 +512,19 @@ public class EvaluationService {
             log.info("8. Updating score for competency: {} to {}", competency, score);
             Map<String, Integer> existingRatings = evaluation.getManagerCompetencyRatings();
             existingRatings.put(competency, score);
+            
+            // Recalculate overall manager rating from competency ratings
+            log.info("8.5. Recalculating overall manager rating from competency ratings");
+            if (!existingRatings.isEmpty()) {
+                double averageRating = existingRatings.values().stream()
+                    .mapToInt(Integer::intValue)
+                    .average()
+                    .orElse(0.0);
+                // Keep decimal precision, round to 1 decimal place
+                double roundedRating = Math.round(averageRating * 10.0) / 10.0;
+                evaluation.setManagerRating((int) Math.round(roundedRating)); // Still store as int for DB compatibility
+                log.info("8.6. Calculated manager rating: {} (from {} competencies)", roundedRating, existingRatings.size());
+            }
             
             // Set the reviewed timestamp and status
             log.info("9. Updating review timestamp and status to REVIEWED");
@@ -313,6 +546,27 @@ public class EvaluationService {
             throw new RuntimeException("Failed to update manager competency score: " + e.getMessage(), e);
         } finally {
             log.info("=== Completed updateManagerCompetencyScore ===");
+        }
+    }
+
+    private boolean isManagerAuthorizedForEmployee(Long managerId, User employee) {
+        try {
+            if (employee == null || employee.getId() == null) return false;
+            User manager = userRepository.findById(managerId).orElse(null);
+            if (manager == null) return false;
+            if (manager.getManagedProjects() == null || manager.getManagedProjects().isEmpty()) return false;
+            if (employee.getProjects() == null || employee.getProjects().isEmpty()) return false;
+            // Check intersection
+            java.util.Set<Long> employeeProjectIds = employee.getProjects().stream().map(Project::getId).collect(java.util.stream.Collectors.toSet());
+            for (Project p : manager.getManagedProjects()) {
+                if (p != null && employeeProjectIds.contains(p.getId())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception ex) {
+            log.warn("Authorization check failed due to exception: {}", ex.getMessage());
+            return false;
         }
     }
 

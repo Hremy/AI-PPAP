@@ -18,6 +18,18 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Add dev auth headers for backend's DevHeaderAuthFilter so method security works in dev
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        const roles = (u?.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',');
+        if (u?.username || u?.email) config.headers['X-User'] = u.username || u.email;
+        if (roles) config.headers['X-Roles'] = roles;
+      }
+    } catch (_) {
+      // ignore parsing issues; headers just won't be added
+    }
     return config;
   },
   (error) => {
@@ -164,7 +176,7 @@ export const requireAuth = () => {
 
 // Admin: managers
 export const getManagers = async () => {
-  const res = await api.get('/v1/admin/managers');
+  const res = await api.get('/v1/users/managers');
   return res.data;
 };
 
@@ -174,8 +186,69 @@ export const getAdmins = async () => {
   return res.data;
 };
 
-export const createManager = async (manager) => {
-  const res = await api.post('/v1/admin/managers', manager);
+export const createManager = async ({ username, email, password, firstName, lastName, department }) => {
+  // Backend expects request params, not JSON body
+  const res = await api.post('/v1/users/managers', null, {
+    params: { username, email, password, firstName, lastName, department },
+  });
+  return res.data;
+};
+
+// Projects
+export const fetchProjects = async () => {
+  const res = await api.get('/v1/projects');
+  return res.data;
+};
+
+export const createProject = async ({ name }) => {
+  const res = await api.post('/v1/projects', { name });
+  return res.data;
+};
+
+export const assignUserProjects = async ({ userId, projectIds }) => {
+  const res = await api.put(`/v1/users/${userId}/projects`, projectIds);
+  return res.data;
+};
+
+export const assignManagedProjects = async ({ userId, projectIds }) => {
+  const res = await api.put(`/v1/users/${userId}/managed-projects`, projectIds);
+  return res.data;
+};
+
+export const assignMyProjects = async ({ identifier, projectIds }) => {
+  // identifier can be username or email; backend resolves either
+  const res = await api.put('/v1/users/me/projects', projectIds, {
+    headers: {
+      'X-User': identifier,
+    },
+  });
+  return res.data;
+};
+
+export const getMyProjects = async ({ identifier }) => {
+  const res = await api.get('/v1/users/me/projects', {
+    headers: {
+      'X-User': identifier,
+    },
+  });
+  return res.data;
+};
+
+// Manager dashboard
+export const getManagerDashboard = async () => {
+  const res = await api.get('/v1/manager/dashboard');
+  return res.data;
+};
+
+// Manager analytics
+export const getManagerAnalytics = async () => {
+  const res = await api.get('/v1/manager/analytics');
+  return res.data;
+};
+
+// Evaluations (admin/all)
+export const getEvaluations = async () => {
+  const res = await api.get('/v1/evaluations');
   return res.data;
 };
 
@@ -186,3 +259,23 @@ export const getManagerDashboard = async () => {
 };
 
 export default api;
+// KEQs (Admin CRUD)
+export const getKEQs = async (params = {}) => {
+  const res = await api.get('/v1/keqs', { params });
+  return res.data;
+};
+
+export const createKEQ = async (payload) => {
+  const res = await api.post('/v1/keqs', payload);
+  return res.data;
+};
+
+export const updateKEQ = async (id, payload) => {
+  const res = await api.put(`/v1/keqs/${id}`, payload);
+  return res.data;
+};
+
+export const deleteKEQ = async (id) => {
+  const res = await api.delete(`/v1/keqs/${id}`);
+  return res.data;
+};

@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       try {
         const decoded = jwtDecode(token);
-        setCurrentUser({
+        const userData = {
           id: decoded.sub,
           username: decoded.username,
           email: decoded.email,
@@ -25,7 +25,10 @@ export const AuthProvider = ({ children }) => {
           lastName: decoded.lastName,
           department: decoded.department,
           position: decoded.position
-        });
+        };
+        setCurrentUser(userData);
+        // Store user data for API interceptor
+        localStorage.setItem('user', JSON.stringify(userData));
       } catch (error) {
         console.error('Error decoding token:', error);
         removeAuthToken();
@@ -37,7 +40,7 @@ export const AuthProvider = ({ children }) => {
   const login = (token) => {
     const decoded = jwtDecode(token);
     setAuthToken(token);
-    setCurrentUser({
+    const userData = {
       id: decoded.sub,
       username: decoded.username,
       email: decoded.email,
@@ -46,7 +49,10 @@ export const AuthProvider = ({ children }) => {
       lastName: decoded.lastName,
       department: decoded.department,
       position: decoded.position
-    });
+    };
+    setCurrentUser(userData);
+    // Store user data for API interceptor
+    localStorage.setItem('user', JSON.stringify(userData));
   };
 
   const logout = async () => {
@@ -59,6 +65,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       // Always perform client-side cleanup
       removeAuthToken();
+      localStorage.removeItem('user');
       setCurrentUser(null);
       navigate('/login');
     }

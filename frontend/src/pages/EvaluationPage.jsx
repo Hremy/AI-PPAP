@@ -1,91 +1,54 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import SimplifiedEvaluationForm from '../components/evaluation/SimplifiedEvaluationForm';
+import { Link, useNavigate } from 'react-router-dom';
+import SelfEvaluationForm from '../components/evaluation/SelfEvaluationForm';
 
 const EvaluationPage = () => {
-  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const handleClose = () => {
+    // Go back if possible, else to dashboard
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/dashboard');
+  };
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Navigation - Using Global Colors */}
-      <nav className="bg-white/90 backdrop-blur-md border-b border-primary/20 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+    <div className="min-h-screen">
+      {/* Dimmed backdrop */}
+      <div className="fixed inset-0 bg-black/50 z-40" onClick={handleClose} />
+
+      {/* Modal */}
+      <div className="fixed inset-0 z-50 flex items-start md:items-center justify-center p-4 md:p-8">
+        <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+          {/* Modal header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b">
             <div className="flex items-center space-x-2">
               <Link to="/" className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-secondary rounded-lg flex items-center justify-center shadow-md">
                   <span className="text-white font-bold text-sm">AI</span>
                 </div>
-                <span className="text-xl font-bold text-secondary">
-                  AI-PPPA
-                </span>
+                <span className="text-lg font-bold text-secondary">AI-PPPA</span>
               </Link>
+              <span className="text-gray-300">/</span>
+              <span className="text-sm text-gray-700 font-medium">Performance Evaluation</span>
             </div>
-            <div className="hidden md:flex items-center space-x-6">
-              <Link 
-                to="/evaluation" 
-                className="text-secondary font-medium px-3 py-2 rounded-md text-sm transition-colors bg-white/20"
-              >
-                Evaluation
-              </Link>
+            <button
+              onClick={handleClose}
+              className="rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 p-2"
+              aria-label="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
 
-
-              {isAuthenticated ? (
-                <>
-                  <Link 
-                    to="/dashboard" 
-                    className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Dashboard
-                  </Link>
-                  <Link 
-                    to="/profile" 
-                    className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Profile
-                  </Link>
-                  <Link 
-                    to="/logout" 
-                    className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Logout
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <Link 
-                    to="/login" 
-                    className="text-secondary/70 hover:text-secondary px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                  >
-                    Sign In
-                  </Link>
-                  <Link 
-                    to="/register" 
-                    className="bg-secondary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-secondary/90 transition-colors"
-                  >
-                    Get Started
-                  </Link>
-                </>
-              )}
-            </div>
+          {/* Modal content */}
+          <div className="max-h-[85vh] overflow-y-auto">
+            <SelfEvaluationForm />
           </div>
         </div>
-      </nav>
-
-      {/* Hero Section - Using Global Colors */}
-      <div className="bg-primary text-secondary py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">Performance Evaluation</h1>
-          <p className="text-xl text-secondary/80 max-w-3xl mx-auto">
-            Complete the form below to evaluate team performance and provide valuable feedback.
-          </p>
-        </div>
       </div>
-
-      {/* Evaluation Form Section */}
-      <SimplifiedEvaluationForm />
     </div>
   );
-};
+}
+;
 
 export default EvaluationPage;

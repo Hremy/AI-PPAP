@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { draftEvaluation as draftEval } from '../../services/aiService';
+import { getMyProjects } from '../../lib/api';
 import { 
   CheckCircleIcon,
   PaperAirplaneIcon,
@@ -27,50 +28,53 @@ const SimplifiedEvaluationForm = () => {
   const [submitted, setSubmitted] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDraft, setAiDraft] = useState('');
+  // Project selection (required)
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const { data: myProjects = [], isLoading: projectsLoading } = useQuery({
+    queryKey: ['my-projects', currentUser?.email || currentUser?.username],
+    queryFn: async () => {
+      if (!currentUser) return [];
+      return await getMyProjects({ identifier: currentUser.email || currentUser.username });
+    },
+    enabled: !!currentUser,
+  });
+  // Timeline selections
+  const now = new Date();
+  const defaultYear = now.getFullYear();
+  const defaultQuarter = Math.floor(now.getMonth() / 3) + 1; // 1..4
+  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const [selectedQuarter, setSelectedQuarter] = useState(defaultQuarter);
 
-  // Competencies for rating
-  const competencies = [
-    {
-      id: 'technical_skills',
-      name: 'Technical Skills',
-      description: 'Proficiency in job-related technical competencies'
-    },
-    {
-      id: 'communication',
-      name: 'Communication',
-      description: 'Ability to communicate effectively with team and stakeholders'
-    },
-    {
-      id: 'problem_solving',
-      name: 'Problem Solving',
-      description: 'Capability to analyze and solve complex problems'
-    },
-    {
-      id: 'teamwork',
-      name: 'Teamwork',
-      description: 'Collaboration and working effectively with others'
-    },
-    {
-      id: 'leadership',
-      name: 'Leadership',
-      description: 'Leading initiatives and guiding team members'
-    },
-    {
-      id: 'adaptability',
-      name: 'Adaptability',
-      description: 'Flexibility and ability to adapt to changes'
-    },
-    {
-      id: 'time_management',
-      name: 'Time Management',
-      description: 'Efficiently managing time and meeting deadlines'
-    },
-    {
-      id: 'quality_focus',
-      name: 'Quality Focus',
-      description: 'Commitment to delivering high-quality work'
+  // Load KEQs and derive dynamic competencies (effective from selected Year/Quarter)
+  const { data: keqs = [], isLoading: keqsLoading } = useQuery({
+    queryKey: ['keqs','all'],
+    queryFn: async () => {
+      try {
+        const { getKEQs } = await import('../../lib/api');
+        return await getKEQs();
+      } catch {
+        return [];
+      }
     }
-  ];
+  });
+
+  const isEffective = (k, year, quarter) => {
+    if (!k) return false;
+    if (k.isActive === false) return false;
+    if (!k.effectiveFromYear || !k.effectiveFromQuarter) return true;
+    if (k.effectiveFromYear < year) return true;
+    if (k.effectiveFromYear === year && k.effectiveFromQuarter <= quarter) return true;
+    return false;
+  };
+
+  const snake = (s) => s?.toString()?.trim()?.toLowerCase()?.replace(/[^a-z0-9]+/g, '_')?.replace(/^_+|_+$/g, '') || '';
+  const dynamicCompetencies = useMemo(() => {
+    return (keqs || [])
+      .filter(k => isEffective(k, selectedYear, selectedQuarter))
+      .sort((a,b)=> (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+      .map(k => ({ id: snake(k.category), name: k.category, description: k.description || '' }));
+  }, [keqs, selectedYear, selectedQuarter]);
 
   // Submit evaluation mutation
   const submitMutation = useMutation({
@@ -95,7 +99,19 @@ const SimplifiedEvaluationForm = () => {
       setSubmitted(true);
       queryClient.invalidateQueries(['evaluations']);
     },
-    onError: (error) => {
+    onError: async (error) => {
+      const msg = (error?.message || '').toLowerCase();
+      if (msg.includes('already submitted') || (msg.includes('already') && msg.includes('quarter'))) {
+        toast((t) => (
+          <span>
+            You have already submitted for this Project and Quarter/Year.<br />
+            We’ve kept your existing submission.
+          </span>
+        ));
+        setSubmitted(true);
+        queryClient.invalidateQueries(['evaluations']);
+        return;
+      }
       toast.error(error.message || 'Failed to submit evaluation');
     }
   });
@@ -115,6 +131,10 @@ const SimplifiedEvaluationForm = () => {
     e.preventDefault();
     
     // Validation
+    if (!selectedProjectId) {
+      setAttemptedSubmit(true);
+      return toast.error('Please select a project');
+    }
     if (formData.overallRating === 0) {
       toast.error('Please provide an overall rating');
       return;
@@ -126,11 +146,23 @@ const SimplifiedEvaluationForm = () => {
     }
     
     // Prepare submission data
+    // Build competencyRatings with KEQ text keys (title-case) so backend normalizer handles them
+    const competencyRatings = Object.fromEntries(
+      Object.entries(formData.competencies || {}).map(([id, score]) => {
+        const comp = dynamicCompetencies.find(c => c.id === id);
+        const titleKey = comp?.name || id;
+        return [titleKey, score];
+      })
+    );
+
     const submissionData = {
       employeeName: `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'Employee',
       employeeEmail: currentUser?.email || 'employee@company.com',
       overallRating: formData.overallRating,
-      competencyRatings: formData.competencies,
+      competencyRatings,
+      projectId: Number(selectedProjectId),
+      evaluationYear: selectedYear,
+      evaluationQuarter: selectedQuarter,
       // Remove all text fields - only ratings
       achievements: '',
       challenges: '',
@@ -223,6 +255,93 @@ const SimplifiedEvaluationForm = () => {
 
         {/* Evaluation Form */}
         <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Timeline (Year & Quarter) */}
+          <div className="bg-white rounded-2xl shadow-lg p-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Timeline</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {Array.from({ length: 6 }).map((_, i) => {
+                    const year = defaultYear - 2 + i; // two years back to three ahead
+                    return <option key={year} value={year}>{year}</option>;
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quarter</label>
+                <select
+                  value={selectedQuarter}
+                  onChange={(e) => setSelectedQuarter(parseInt(e.target.value, 10))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value={1}>Q1 (Jan - Mar)</option>
+                  <option value={2}>Q2 (Apr - Jun)</option>
+                  <option value={3}>Q3 (Jul - Sep)</option>
+                  <option value={4}>Q4 (Oct - Dec)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Project & Timeline */}
+          <div className="bg-white rounded-2xl shadow-lg p-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Project & Timeline</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Project */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Project</label>
+                <select
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  required
+                  disabled={projectsLoading}
+                >
+                  <option value="">{projectsLoading ? 'Loading your projects...' : 'Select a project'}</option>
+                  {Array.isArray(myProjects) && myProjects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {attemptedSubmit && !selectedProjectId && (
+                  <p className="text-xs text-red-600 mt-1">Project is required</p>
+                )}
+              </div>
+              {/* Year */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {Array.from({ length: 6 }).map((_, i) => {
+                    const year = defaultYear - 2 + i;
+                    return <option key={year} value={year}>{year}</option>;
+                  })}
+                </select>
+              </div>
+              {/* Quarter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quarter</label>
+                <select
+                  value={selectedQuarter}
+                  onChange={(e) => setSelectedQuarter(parseInt(e.target.value, 10))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value={1}>Q1 (Jan - Mar)</option>
+                  <option value={2}>Q2 (Apr - Jun)</option>
+                  <option value={3}>Q3 (Jul - Sep)</option>
+                  <option value={4}>Q4 (Oct - Dec)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Overall Rating */}
           <div className="bg-white rounded-2xl shadow-lg p-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
@@ -241,14 +360,14 @@ const SimplifiedEvaluationForm = () => {
             </div>
           </div>
 
-          {/* Competency Ratings */}
+          {/* Competency Ratings (from KEQs) */}
           <div className="bg-white rounded-2xl shadow-lg p-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
               <CheckCircleIcon className="w-6 h-6 mr-2 text-primary" />
               Competency Ratings
             </h2>
             <div className="space-y-6">
-              {competencies.map((competency) => (
+              {(keqsLoading ? [] : dynamicCompetencies).map((competency) => (
                 <div key={competency.id} className="bg-gray-50 rounded-xl p-6">
                   <div className="mb-4">
                     <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -264,6 +383,9 @@ const SimplifiedEvaluationForm = () => {
                   )}
                 </div>
               ))}
+              {!keqsLoading && dynamicCompetencies.length === 0 && (
+                <p className="text-sm text-gray-500">No KEQs are effective for Q{selectedQuarter} {selectedYear}. Adjust the Timeline above.</p>
+              )}
             </div>
           </div>
 

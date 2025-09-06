@@ -23,6 +23,13 @@ public class Evaluation {
     @JoinColumn(name = "reviewer_id")
     @JsonBackReference
     private User reviewer;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id")
+    private Project project;
+    
+    @Column(nullable = false)
+    private Integer overallRating;
     
     @Column(nullable = false)
     private Integer overallRating;
@@ -119,6 +126,9 @@ public class Evaluation {
     
     public User getReviewer() { return reviewer; }
     public void setReviewer(User reviewer) { this.reviewer = reviewer; }
+    
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
     
     public Integer getOverallRating() { return overallRating; }
     public void setOverallRating(Integer overallRating) { this.overallRating = overallRating; }

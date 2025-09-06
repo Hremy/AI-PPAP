@@ -1,6 +1,7 @@
 package com.ai.pat.backend.repository;
 
 import com.ai.pat.backend.model.Evaluation;
+import com.ai.pat.backend.model.Project;
 import com.ai.pat.backend.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -34,4 +35,23 @@ public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
     
     @Query("SELECT DISTINCT e FROM Evaluation e LEFT JOIN FETCH e.managerCompetencyRatings WHERE e.id = :id")
     Optional<Evaluation> findByIdWithManagerCompetencyRatings(@Param("id") Long id);
+
+    @Query("SELECT DISTINCT e FROM Evaluation e JOIN e.employee emp LEFT JOIN emp.projects ep WHERE ep IN :projects OR e.project IN :projects")
+    List<Evaluation> findByEmployeeProjectsOrEvaluationProjectIn(@Param("projects") List<Project> projects);
+
+    boolean existsByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonth(
+            Long employeeId,
+            Long projectId,
+            Integer evaluationYear,
+            Integer evaluationMonth
+    );
+
+    java.util.Optional<Evaluation> findFirstByEmployeeIdAndProjectIdAndEvaluationYearAndEvaluationMonthOrderByCreatedAtDesc(
+            Long employeeId,
+            Long projectId,
+            Integer evaluationYear,
+            Integer evaluationMonth
+    );
+
+    java.util.List<Evaluation> findByEmployeeEmail(String employeeEmail);
 }

@@ -22,12 +22,15 @@ import AdminLayout from './pages/admin/AdminLayout';
 import UserRoles from './pages/admin/UserRoles';
 import EvaluationsPage from './pages/admin/EvaluationsPage';
 import AdminProfile from './pages/admin/AdminProfile';
+import Projects from './pages/admin/Projects';
 import Settings from './pages/admin/Settings';
+import KEQs from './pages/admin/KEQs';
 import ManagerEvaluationsPage from './pages/manager/EvaluationsPage';
 import ManagerLayout from './pages/manager/ManagerLayout';
 import ManagerDashboard from './pages/manager/ManagerDashboard';
 import ManagerProfile from './pages/manager/ManagerProfile';
 import ManagerAnalytics from './pages/manager/ManagerAnalytics';
+import ManagerTeam from './pages/manager/ManagerTeam';
 import Features from './pages/public/Features';
 import EvaluationPage from './pages/EvaluationPage';
 import Profile from './pages/profile/Profile';
@@ -36,6 +39,11 @@ import RoleBasedRedirect from './components/dashboard/RoleBasedRedirect';
 import DashboardRouter from './components/dashboard/DashboardRouter';
 import ErrorBoundary from './components/ErrorBoundary';
 import RoleBasedRouteGuard from './components/auth/RoleBasedRouteGuard';
+
+// Performance and AI Pages
+import PerformanceHistory from './pages/performance/PerformanceHistory';
+import PerformanceGoals from './pages/performance/PerformanceGoals';
+import AIInsights from './pages/ai/AIInsights';
 
 
 import './index.css';
@@ -175,6 +183,50 @@ function App() {
               } 
             />
             <Route 
+              path="/admin/projects" 
+              element={
+                <ProtectedRoute requiredRole="ADMIN">
+                  <AdminLayout>
+                    <Projects />
+                  </AdminLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/keqs" 
+              element={
+                <ProtectedRoute requiredRole="ADMIN">
+                  <AdminLayout>
+                    <KEQs />
+                  </AdminLayout>
+                </ProtectedRoute>
+              } 
+            />
+                                        <Route
+                              path="/admin/evaluations"
+                              element={
+                                <ProtectedRoute requiredRole="ADMIN">
+                                  <EvaluationsPage />
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/admin/profile"
+                              element={
+                                <ProtectedRoute requiredRole="ADMIN">
+                                  <AdminProfile />
+                                </ProtectedRoute>
+                              }
+                            />
+            <Route 
+              path="/manager/evaluations" 
+              element={
+                <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
+                  <ManagerEvaluationsPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
               path="/manager/analytics" 
               element={
                 <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
@@ -189,12 +241,7 @@ function App() {
                               element={
                                 <ProtectedRoute requiredRoles={["MANAGER", "ADMIN"]}>
                                   <ManagerLayout>
-                                    <div className="flex items-center justify-center h-96">
-                                      <div className="text-center">
-                                        <h1 className="text-2xl font-bold text-gray-900 mb-4">Team Management</h1>
-                                        <p className="text-gray-500">Coming Soon...</p>
-                                      </div>
-                                    </div>
+                                    <ManagerTeam />
                                   </ManagerLayout>
                                 </ProtectedRoute>
                               }
@@ -208,11 +255,32 @@ function App() {
                               }
                             />
             
-            {/* Placeholder routes for future pages */}
+            {/* Performance and AI routes */}
             <Route path="/reviews/self" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Self Review</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
-            <Route path="/performance/history" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Performance History</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
-            <Route path="/performance/goals" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Goals</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
-            <Route path="/ai/insights" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">AI Insights</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
+            <Route 
+              path="/performance/history" 
+              element={
+                <ProtectedRoute>
+                  <PerformanceHistory />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/performance/goals" 
+              element={
+                <ProtectedRoute>
+                  <PerformanceGoals />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/ai/insights" 
+              element={
+                <ProtectedRoute>
+                  <AIInsights />
+                </ProtectedRoute>
+              } 
+            />
             <Route path="/settings/profile" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Profile Settings</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
             
             {/* Default redirect */}

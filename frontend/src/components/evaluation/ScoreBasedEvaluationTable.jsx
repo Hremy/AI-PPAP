@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { StarIcon, PencilIcon, CheckIcon, XMarkIcon, TrashIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
+import { getKEQs } from '../../lib/api';
 
-const ScoreBasedEvaluationTable = () => {
+const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed = false }) => {
   const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,26 +17,45 @@ const ScoreBasedEvaluationTable = () => {
   const [groupByMonth, setGroupByMonth] = useState(true);
   
   const queryClient = useQueryClient();
+  const { hasRole, currentUser } = useAuth();
+  const isAdmin = hasRole('ADMIN');
 
-  // Competencies that should be displayed as columns
-  const competencies = [
-    { id: 'technical_skills', name: 'Technical Skills' },
-    { id: 'communication', name: 'Communication' },
-    { id: 'problem_solving', name: 'Problem Solving' },
-    { id: 'teamwork', name: 'Teamwork' },
-    { id: 'leadership', name: 'Leadership' },
-    { id: 'adaptability', name: 'Adaptability' },
-    { id: 'time_management', name: 'Time Management' },
-    { id: 'quality_focus', name: 'Quality Focus' }
-  ];
+  // Load KEQs and derive competencies dynamically (use KEQ text as title key)
+  const { data: keqs = [] } = useQuery({
+    queryKey: ['keqs','all'],
+    queryFn: async () => {
+      try { return await getKEQs(); } catch { return []; }
+    }
+  });
+
+  const snake = (s) => s?.toString()?.trim()?.toLowerCase()?.replace(/[^a-z0-9]+/g, '_')?.replace(/^_+|_+$/g, '') || '';
+  const competencies = useMemo(() => {
+    if (!Array.isArray(keqs)) return [];
+    // For table views, we do not filter by effective date; we show current KEQs as columns
+    return keqs
+      .filter(k => k && k.category)
+      .sort((a,b)=> (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+      .map(k => ({ id: snake(k.category), name: k.category }));
+  }, [keqs]);
 
   // Fetch evaluations
   const { data: evaluationsData, isLoading, error: queryError } = useQuery({
     queryKey: ['evaluations'],
     queryFn: async () => {
+      // Dev auth headers for backend's DevHeaderAuthFilter so manager filtering applies
+      const devHeaders = (() => {
+        if (!currentUser) return {};
+        const roles = (currentUser.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',');
+        const hdr = {};
+        if (currentUser.username || currentUser.email) hdr['X-User'] = currentUser.username || currentUser.email;
+        if (roles) hdr['X-Roles'] = roles;
+        return hdr;
+      })();
+
       const response = await fetch('http://localhost:8084/api/v1/evaluations', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          ...devHeaders
         }
       });
       
@@ -50,11 +71,22 @@ const ScoreBasedEvaluationTable = () => {
   // Submit manager score mutation
   const submitManagerScoreMutation = useMutation({
     mutationFn: async ({ evaluationId, competency, score }) => {
+      // Dev auth headers for backend's DevHeaderAuthFilter
+      const devHeaders = (() => {
+        if (!currentUser) return {};
+        const roles = (currentUser.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',');
+        const hdr = {};
+        if (currentUser.username || currentUser.email) hdr['X-User'] = currentUser.username || currentUser.email;
+        if (roles) hdr['X-Roles'] = roles;
+        return hdr;
+      })();
+
       const response = await fetch(`http://localhost:8084/api/v1/evaluations/${evaluationId}/manager-score`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          ...devHeaders
         },
         body: JSON.stringify({ competency, score })
       });
@@ -95,11 +127,16 @@ const ScoreBasedEvaluationTable = () => {
           const avg = computeManagerAverage(target?.managerCompetencyRatings);
           if (avg && Number.isFinite(avg)) {
             // Persist computed overall via the same endpoint
+            // Include dev headers here as well
             await fetch(`http://localhost:8084/api/v1/evaluations/${variables.evaluationId}/manager-score`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+                'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+                ...(currentUser ? {
+                  'X-User': (currentUser.username || currentUser.email || ''),
+                  'X-Roles': (currentUser.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',')
+                } : {})
               },
               body: JSON.stringify({ competency: 'overall', score: Math.round(avg) })
             }).catch(() => {});
@@ -131,8 +168,8 @@ const ScoreBasedEvaluationTable = () => {
       return response.json();
     },
     onSuccess: () => {
+      // Silent refresh without popup
       queryClient.invalidateQueries({ queryKey: ['evaluations'] });
-      toast.success('Evaluation deleted successfully');
       setDeleteConfirmation({ isOpen: false, evaluationId: null, employeeName: '' });
     },
     onError: (error) => {
@@ -158,60 +195,95 @@ const ScoreBasedEvaluationTable = () => {
     setDeleteConfirmation({ isOpen: false, evaluationId: null, employeeName: '' });
   };
 
-  // Get available months from evaluations
-  const availableMonths = useMemo(() => {
-    const months = new Set();
-    evaluations.forEach(evaluation => {
+  // First filter by project selection
+  const projectFilteredEvaluations = useMemo(() => {
+    if (!Array.isArray(evaluations) || selectedProjectIds.length === 0) return evaluations;
+    const set = new Set(selectedProjectIds);
+    return evaluations.filter((e) => {
+      const pid = e.projectId || e.project?.id;
+      return pid && set.has(pid);
+    });
+  }, [evaluations, selectedProjectIds]);
+
+  // Get available years from project-filtered evaluations
+  const availableYears = useMemo(() => {
+    const years = new Set();
+    projectFilteredEvaluations.forEach(evaluation => {
+      const yy = evaluation?.evaluationYear;
+      if (yy) { years.add(String(yy)); return; }
       if (evaluation.submittedAt) {
         const date = new Date(evaluation.submittedAt);
-        const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        months.add(monthYear);
+        years.add(String(date.getFullYear()));
       }
     });
-    return Array.from(months).sort().reverse();
-  }, [evaluations]);
+    return Array.from(years).sort().reverse();
+  }, [projectFilteredEvaluations]);
 
-  // Filter evaluations by selected month
+  // Filter evaluations by selected year
   const filteredEvaluations = useMemo(() => {
-    if (selectedMonth === 'all') return evaluations;
-    
-    return evaluations.filter(evaluation => {
+    let base = projectFilteredEvaluations;
+    if (selectedMonth === 'all') return base;
+    const targetYear = parseInt(selectedMonth, 10);
+    base = base.filter(evaluation => {
+      const yy = evaluation?.evaluationYear;
+      if (yy && yy === targetYear) return true;
       if (!evaluation.submittedAt) return false;
       const date = new Date(evaluation.submittedAt);
-      const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      return monthYear === selectedMonth;
+      return date.getFullYear() === targetYear;
     });
-  }, [evaluations, selectedMonth]);
+    // When requested, only show items that have been graded by manager
+    if (showOnlyReviewed) {
+      base = base.filter(e => {
+        const hasMgrOverall = e.managerRating != null;
+        const mgrCompCount = e.managerCompetencyRatings ? Object.keys(e.managerCompetencyRatings).length : 0;
+        return e.status === 'REVIEWED' || hasMgrOverall || mgrCompCount > 0;
+      });
+    }
+    return base;
+  }, [projectFilteredEvaluations, selectedMonth]);
 
-  // Group evaluations by month
+  // Helper: get quarter-year label
+  const getQuarterYearLabel = (evaluation) => {
+    const ym = evaluation?.evaluationMonth;
+    const yy = evaluation?.evaluationYear;
+    if (yy && ym) {
+      const q = Math.floor((Number(ym) - 1) / 3) + 1;
+      return `Q${q} ${yy}`;
+    }
+    // Fallback from submittedAt
+    if (evaluation?.submittedAt) {
+      const d = new Date(evaluation.submittedAt);
+      const q = Math.floor(d.getMonth() / 3) + 1;
+      return `Q${q} ${d.getFullYear()}`;
+    }
+    return 'No Timeline';
+  };
+
+  // Group evaluations by quarter
   const groupedEvaluations = useMemo(() => {
     if (!groupByMonth) return { 'All Evaluations': filteredEvaluations };
-    
+
     const groups = {};
     filteredEvaluations.forEach(evaluation => {
-      if (!evaluation.submittedAt) {
-        if (!groups['No Date']) groups['No Date'] = [];
-        groups['No Date'].push(evaluation);
-        return;
-      }
-      
-      const date = new Date(evaluation.submittedAt);
-      const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      
-      if (!groups[monthName]) groups[monthName] = [];
-      groups[monthName].push(evaluation);
+      const key = getQuarterYearLabel(evaluation);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(evaluation);
     });
-    
-    // Sort groups by date (newest first)
+
+    // Sort groups like 'Q4 2025', 'Q3 2025', ...
+    const parseKey = (k) => {
+      const m = /^Q(\d)\s+(\d{4})$/.exec(k);
+      if (!m) return { y: -Infinity, q: -Infinity };
+      return { y: Number(m[2]), q: Number(m[1]) };
+    };
     const sortedGroups = {};
-    Object.keys(groups).sort((a, b) => {
-      if (a === 'No Date') return 1;
-      if (b === 'No Date') return -1;
-      return new Date(b) - new Date(a);
-    }).forEach(key => {
-      sortedGroups[key] = groups[key];
-    });
-    
+    Object.keys(groups)
+      .sort((a, b) => {
+        const pa = parseKey(a), pb = parseKey(b);
+        if (pa.y !== pb.y) return pb.y - pa.y;
+        return pb.q - pa.q;
+      })
+      .forEach(key => { sortedGroups[key] = groups[key]; });
     return sortedGroups;
   }, [filteredEvaluations, groupByMonth]);
 
@@ -256,17 +328,44 @@ const ScoreBasedEvaluationTable = () => {
     });
   };
 
+  const formatTime = (dateString) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
   // Compute average of manager competency scores (1-5), excluding 'overall'. Returns number (one decimal) or null
   const computeManagerAverage = (managerRatings) => {
     if (!managerRatings) return null;
-    const competencyIds = new Set(competencies.map(c => c.id));
+    
+    // Get all valid rating values regardless of key matching
     const values = Object.entries(managerRatings)
-      .filter(([key]) => competencyIds.has(key))
-      .map(([, v]) => (typeof v === 'string' ? parseInt(v, 10) : v))
-      .filter(v => Number.isFinite(v) && v >= 1 && v <= 5);
+      .filter(([key]) => key !== 'overall')
+      .map(([, v]) => (typeof v === 'string' ? parseFloat(v) : v))
+      .filter(v => Number.isFinite(v) && v >= 1 && v <= 5 && v !== 0);
+    
     if (!values.length) return null;
     const rawAvg = values.reduce((a, b) => a + b, 0) / values.length;
-    const oneDecimal = Math.round(rawAvg * 10) / 10; // keep one decimal for display
+    const oneDecimal = Math.round(rawAvg * 10) / 10;
+    return Math.min(5, Math.max(1, oneDecimal));
+  };
+
+  // Compute average of employee competency scores (1-5), excluding 'overall'. Returns number (one decimal) or null
+  const computeEmployeeAverage = (employeeRatings) => {
+    if (!employeeRatings) return null;
+    
+    // Get all valid rating values regardless of key matching
+    const values = Object.entries(employeeRatings)
+      .filter(([key]) => key !== 'overall')
+      .map(([, v]) => (typeof v === 'string' ? parseFloat(v) : v))
+      .filter(v => Number.isFinite(v) && v >= 1 && v <= 5 && v !== 0);
+    
+    if (!values.length) return null;
+    const rawAvg = values.reduce((a, b) => a + b, 0) / values.length;
+    const oneDecimal = Math.round(rawAvg * 10) / 10;
     return Math.min(5, Math.max(1, oneDecimal));
   };
 
@@ -341,10 +440,73 @@ const ScoreBasedEvaluationTable = () => {
   };
 
   const renderScoreCell = (evaluation, competency) => {
-    const key = `${evaluation.id}-${competency.id}`;
+    const key = `${evaluation.id}-${competency.name}`;
     const isEditing = editingScores[key];
-    const employeeScore = evaluation.competencyRatings?.[competency.id];
-    const managerScore = evaluation.managerCompetencyRatings?.[competency.id];
+    // KEQ ratings are stored using the actual KEQ category names
+    // Convert KEQ category to title case to match stored employee ratings
+    const toTitleCase = (str) => {
+      return str.toLowerCase().split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+    };
+    
+    const titleCaseKey = toTitleCase(competency.name);
+    
+    // Try multiple formats to match stored employee ratings
+    // Special handling for common variations
+    const getEmployeeScore = () => {
+      const ratingsObj = evaluation.competencyRatings || evaluation.ratings || {};
+      
+      // Direct matches
+      if (ratingsObj[titleCaseKey]) return ratingsObj[titleCaseKey];
+      if (ratingsObj[competency.name]) return ratingsObj[competency.name];
+      
+      // Special cases for known variations
+      if (competency.name === 'QUALITY' && ratingsObj['Quality Focus']) return ratingsObj['Quality Focus'];
+      if (competency.name === 'TECHNICAL SKILLS' && ratingsObj['Technical Skills']) return ratingsObj['Technical Skills'];
+      
+      // Fallback to case variations
+      const keys = Object.keys(ratingsObj);
+      const normalizedCompetency = competency.name.toLowerCase().replace(/\s+/g, '');
+      
+      for (const key of keys) {
+        const normalizedKey = key.toLowerCase().replace(/\s+/g, '');
+        if (normalizedKey.includes(normalizedCompetency) || normalizedCompetency.includes(normalizedKey)) {
+          return ratingsObj[key];
+        }
+      }
+      
+      return null;
+    };
+    
+    const employeeScore = getEmployeeScore();
+    // Manager score lookup with same smart matching as employee scores
+    const getManagerScore = () => {
+      const ratingsObj = evaluation.managerCompetencyRatings || {};
+      
+      // Direct matches
+      if (ratingsObj[titleCaseKey]) return ratingsObj[titleCaseKey];
+      if (ratingsObj[competency.name]) return ratingsObj[competency.name];
+      
+      // Special cases for known variations
+      if (competency.name === 'QUALITY' && ratingsObj['Quality Focus']) return ratingsObj['Quality Focus'];
+      if (competency.name === 'TECHNICAL SKILLS' && ratingsObj['Technical Skills']) return ratingsObj['Technical Skills'];
+      
+      // Fallback to case variations
+      const keys = Object.keys(ratingsObj);
+      const normalizedCompetency = competency.name.toLowerCase().replace(/\s+/g, '');
+      
+      for (const key of keys) {
+        const normalizedKey = key.toLowerCase().replace(/\s+/g, '');
+        if (normalizedKey.includes(normalizedCompetency) || normalizedCompetency.includes(normalizedKey)) {
+          return ratingsObj[key];
+        }
+      }
+      
+      return null;
+    };
+    
+    const managerScore = getManagerScore();
     
     return (
       <td key={competency.id} className="px-4 py-4 border-r border-gray-200">
@@ -352,16 +514,16 @@ const ScoreBasedEvaluationTable = () => {
           {/* Employee Score */}
           <div className="bg-blue-50 rounded-lg p-2">
             <div className="text-xs font-medium text-blue-700 mb-1">Employee</div>
-            {renderStars(employeeScore)}
+            {employeeScore ? renderStars(employeeScore) : <span className="text-gray-400 text-sm">Not rated</span>}
           </div>
           
           {/* Manager Score */}
           <div className="rounded-lg p-2" style={{backgroundColor: 'rgb(0 32 53 / 0.1)'}}>
             <div className="text-xs font-medium mb-1 flex items-center justify-between" style={{color: 'rgb(0 32 53)'}}>
               <span>Manager</span>
-              {!isEditing && (
+              {!isEditing && hasRole('MANAGER') && (
                 <button
-                  onClick={() => handleEditScore(evaluation.id, competency.id)}
+                  onClick={() => handleEditScore(evaluation.id, competency.name)}
                   className="transition-colors"
                   style={{color: 'rgb(0 32 53)'}}
                 >
@@ -369,12 +531,11 @@ const ScoreBasedEvaluationTable = () => {
                 </button>
               )}
             </div>
-            
             {isEditing ? (
               <div className="flex items-center space-x-1">
                 <select
                   value={managerScores[key] || 0}
-                  onChange={(e) => handleScoreChange(evaluation.id, competency.id, e.target.value)}
+                  onChange={(e) => handleScoreChange(evaluation.id, competency.name, e.target.value)}
                   className="text-xs border border-gray-300 rounded px-1 py-1 w-12"
                 >
                   <option value={0}>-</option>
@@ -383,7 +544,7 @@ const ScoreBasedEvaluationTable = () => {
                   ))}
                 </select>
                 <button
-                  onClick={() => handleSaveScore(evaluation.id, competency.id)}
+                  onClick={() => handleSaveScore(evaluation.id, competency.name)}
                   className="transition-colors"
                   style={{color: 'rgb(0 32 53)'}}
                   disabled={submitManagerScoreMutation.isLoading}
@@ -391,14 +552,14 @@ const ScoreBasedEvaluationTable = () => {
                   <CheckIcon className="w-3 h-3" />
                 </button>
                 <button
-                  onClick={() => handleCancelEdit(evaluation.id, competency.id)}
+                  onClick={() => handleCancelEdit(evaluation.id, competency.name)}
                   className="text-red-600 hover:text-red-800 transition-colors"
                 >
                   <XMarkIcon className="w-3 h-3" />
                 </button>
               </div>
             ) : (
-              renderStars(managerScore)
+              managerScore ? renderStars(managerScore) : <span className="text-gray-400 text-sm">Not rated</span>
             )}
           </div>
         </div>
@@ -439,24 +600,22 @@ const ScoreBasedEvaluationTable = () => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <CalendarIcon className="w-5 h-5 text-gray-500" />
-              <label className="text-sm font-medium text-gray-700">Filter by Month:</label>
+              <label className="text-sm font-medium text-gray-700">Filter by Year:</label>
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="all">All Months</option>
-                {availableMonths.map(month => (
-                  <option key={month} value={month}>
-                    {formatMonthYear(month)}
-                  </option>
+                <option value="all">All Years</option>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
                 ))}
               </select>
             </div>
           </div>
           
           <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Group by Month:</label>
+            <label className="text-sm font-medium text-gray-700">Group by Quarter:</label>
             <input
               type="checkbox"
               checked={groupByMonth}
@@ -477,17 +636,17 @@ const ScoreBasedEvaluationTable = () => {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-300">
+          <table className="min-w-full table-fixed divide-y divide-gray-300">
             <thead className="bg-gray-50">
               <tr className="divide-x divide-gray-300">
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
                   Employee
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 w-[12rem] min-w-[12rem]">
                   Overall Rating
                 </th>
                 {competencies.map((competency) => (
-                  <th key={competency.id} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                  <th key={competency.id} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 w-[12rem] min-w-[12rem]">
                     <div className="text-center">
                       {competency.name}
                     </div>
@@ -497,11 +656,19 @@ const ScoreBasedEvaluationTable = () => {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                  Manager
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
                   Submitted Date
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
+                  Timeline
                 </th>
+                {!isAdmin && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-300">
@@ -509,7 +676,7 @@ const ScoreBasedEvaluationTable = () => {
                 <React.Fragment key={monthName}>
                   {groupByMonth && (
                     <tr className="bg-gray-100">
-                      <td colSpan={competencies.length + 5} className="px-6 py-3 text-sm font-semibold text-gray-800 border-b border-gray-300">
+                      <td colSpan={competencies.length + (isAdmin ? 5 : 6)} className="px-6 py-3 text-sm font-semibold text-gray-800 border-b border-gray-300">
                         <div className="flex items-center space-x-2">
                           <CalendarIcon className="w-4 h-4" />
                           <span>{monthName}</span>
@@ -530,12 +697,23 @@ const ScoreBasedEvaluationTable = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 border-r border-gray-200">
+                  <td className="px-6 py-4 border-r border-gray-200 w-[12rem] min-w-[12rem]">
                     <div className="space-y-2">
                       {/* Employee Overall Rating */}
                       <div className="bg-blue-50 rounded-lg p-2">
                         <div className="text-xs font-medium text-blue-700 mb-1">Employee</div>
-                        {renderStars(evaluation.overallRating)}
+                        {(() => {
+                          // Only show computed average if there are actual ratings, not as fallback
+                          const hasActualRatings = evaluation.competencyRatings && Object.keys(evaluation.competencyRatings).length > 0;
+                          if (evaluation.overallRating) {
+                            return renderStars(evaluation.overallRating);
+                          } else if (hasActualRatings) {
+                            const computed = computeEmployeeAverage(evaluation.competencyRatings);
+                            return computed ? renderStars(computed) : <span className="text-gray-400 text-sm">Not rated</span>;
+                          } else {
+                            return <span className="text-gray-400 text-sm">Not rated</span>;
+                          }
+                        })()}
                       </div>
                       
                       {/* Manager Overall Rating (read-only, auto-computed) */}
@@ -544,8 +722,16 @@ const ScoreBasedEvaluationTable = () => {
                           <span>Manager</span>
                         </div>
                         {(() => {
-                          const fallback = computeManagerAverage(evaluation.managerCompetencyRatings);
-                          return renderStars(evaluation.managerRating || fallback);
+                          // Always prioritize computed average over stored managerRating
+                          const hasActualRatings = evaluation.managerCompetencyRatings && Object.keys(evaluation.managerCompetencyRatings).length > 0;
+                          if (hasActualRatings) {
+                            const computed = computeManagerAverage(evaluation.managerCompetencyRatings);
+                            return computed ? renderStars(computed) : <span className="text-gray-400 text-sm">Not rated</span>;
+                          } else if (evaluation.managerRating) {
+                            return renderStars(evaluation.managerRating);
+                          } else {
+                            return <span className="text-gray-400 text-sm">Not rated</span>;
+                          }
                         })()}
                       </div>
                     </div>
@@ -554,18 +740,29 @@ const ScoreBasedEvaluationTable = () => {
                   <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                     {getStatusBadge(evaluation.status)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-200">
-                    {formatDate(evaluation.submittedAt)}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border-r border-gray-200">
+                    {evaluation.reviewerName || '—'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button 
-                      onClick={() => handleDeleteClick(evaluation)}
-                      className="text-[#002035] hover:text-[#002035]/80 transition-colors flex items-center"
-                      title="Delete evaluation"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border-r border-gray-200">
+                    <div className="leading-tight">
+                      <div>{formatDate(evaluation.submittedAt)}</div>
+                      <div className="text-xs text-gray-500">{formatTime(evaluation.submittedAt)}</div>
+                    </div>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {getQuarterYearLabel(evaluation)}
+                  </td>
+                  {!isAdmin && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button 
+                        onClick={() => handleDeleteClick(evaluation)}
+                        className="text-[#002035] hover:text-[#002035]/80 transition-colors flex items-center"
+                        title="Delete evaluation"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
                   ))}
                 </React.Fragment>

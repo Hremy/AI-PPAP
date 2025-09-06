@@ -210,7 +210,7 @@ const HomePage = () => {
           </div>
           <div className="mt-8">
             <Link
-              to="/reviews/self"
+              to="/evaluation"
               className="inline-flex items-center gap-2 bg-primary text-secondary px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
             >
               Start Self Review

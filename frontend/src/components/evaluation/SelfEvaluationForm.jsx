@@ -1,64 +1,105 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { submitEvaluation } from '../../lib/api';
+import { submitEvaluation, getMyProjects, getKEQs } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import toast from 'react-hot-toast';
+import {
+  ChatBubbleLeftRightIcon,
+  UsersIcon,
+  PuzzlePieceIcon,
+  RocketLaunchIcon,
+  SparklesIcon,
+  ArrowsRightLeftIcon,
+  PencilSquareIcon
+} from '@heroicons/react/24/outline';
 
 const SelfEvaluationForm = () => {
   const queryClient = useQueryClient();
+  const { currentUser } = useAuth();
   const [ratings, setRatings] = useState({});
   const [feedback, setFeedback] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  // Projects state
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  // Timeline state (Year/Quarter)
+  const now = new Date();
+  const defaultYear = now.getFullYear();
+  const defaultQuarter = Math.floor(now.getMonth() / 3) + 1; // 1..4
+  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const [selectedQuarter, setSelectedQuarter] = useState(defaultQuarter);
+  const { data: myProjects = [], isLoading: myProjectsLoading } = useQuery({
+    queryKey: ['my-projects', currentUser?.email || currentUser?.username],
+    queryFn: async () => {
+      if (!currentUser) return [];
+      return await getMyProjects({ identifier: currentUser.email || currentUser.username });
+    },
+    enabled: !!currentUser,
+  });
 
-  // Enhanced competencies with better descriptions and categories
-  const competencies = [
-    { 
-      id: 'communication', 
-      name: 'Communication', 
-      description: 'Effectively communicates ideas, listens actively, and provides clear feedback',
-      icon: '💬',
-      category: 'Interpersonal'
-    },
-    { 
-      id: 'teamwork', 
-      name: 'Collaboration & Teamwork', 
-      description: 'Works well with others, supports team goals, and contributes to a positive environment',
-      icon: '🤝',
-      category: 'Interpersonal'
-    },
-    { 
-      id: 'problem_solving', 
-      name: 'Problem Solving', 
-      description: 'Identifies issues quickly, thinks critically, and develops effective solutions',
-      icon: '🧩',
-      category: 'Technical'
-    },
-    { 
-      id: 'initiative', 
-      name: 'Initiative & Leadership', 
-      description: 'Takes ownership, shows self-motivation, and leads by example',
-      icon: '🚀',
-      category: 'Leadership'
-    },
-    { 
-      id: 'quality', 
-      name: 'Quality & Excellence', 
-      description: 'Consistently delivers high-quality work that exceeds expectations',
-      icon: '⭐',
-      category: 'Performance'
-    },
-    { 
-      id: 'adaptability', 
-      name: 'Adaptability', 
-      description: 'Embraces change, learns quickly, and thrives in dynamic environments',
-      icon: '🔄',
-      category: 'Growth'
+  // Fetch KEQs for dynamic competencies
+  const { data: keqs = [] } = useQuery({
+    queryKey: ['keqs'],
+    queryFn: async () => {
+      try { return await getKEQs(); } catch { return []; }
     }
-  ];
+  });
+  useEffect(() => {
+    if (Array.isArray(myProjects) && myProjects.length === 1) {
+      setSelectedProjectId(String(myProjects[0].id));
+    }
+  }, [myProjects]);
+
+  // Helper functions for KEQ processing
+  const isEffective = (k, year, quarter) => {
+    if (!k.effectiveFromYear || !k.effectiveFromQuarter) return true;
+    if (k.effectiveFromYear < year) return true;
+    if (k.effectiveFromYear === year && k.effectiveFromQuarter <= quarter) return true;
+    return false;
+  };
+
+  const snake = (s) => s?.toString()?.trim()?.toLowerCase()?.replace(/[^a-z0-9]+/g, '_')?.replace(/^_+|_+$/g, '') || '';
+
+  // Dynamic competencies from KEQs
+  const competencies = useMemo(() => {
+    console.log('KEQs data:', keqs);
+    console.log('Selected year/quarter:', selectedYear, selectedQuarter);
+    
+    if (!Array.isArray(keqs) || keqs.length === 0) {
+      console.log('No KEQs available - returning empty array');
+      return [];
+    }
+
+    const filteredKeqs = keqs.filter(k => {
+      const effective = k && k.category && isEffective(k, selectedYear, selectedQuarter);
+      console.log(`KEQ "${k?.category}" effective:`, effective, 'effectiveFrom:', k?.effectiveFromYear, 'Q' + k?.effectiveFromQuarter);
+      return effective;
+    });
+    console.log('Filtered KEQs:', filteredKeqs);
+    
+    const mapped = filteredKeqs
+      .sort((a,b)=> (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+      .map(k => ({
+        id: snake(k.category),
+        name: k.category,
+        description: k.description || 'Rate your performance in this area',
+        icon: PencilSquareIcon,
+        category: 'KEQ'
+      }));
+    
+    console.log('Final competencies:', mapped);
+    return mapped;
+  }, [keqs, selectedYear, selectedQuarter]);
 
   const handleRatingChange = (competencyId, value) => {
+    // Find the competency to get its name (original KEQ category)
+    const competency = competencies.find(c => c.id === competencyId);
+    const ratingKey = competency ? competency.name : competencyId;
+    
     setRatings(prev => ({
       ...prev,
-      [competencyId]: parseInt(value, 10)
+      [ratingKey]: parseInt(value, 10)
     }));
   };
 
@@ -66,35 +107,44 @@ const SelfEvaluationForm = () => {
     e.preventDefault();
     
     try {
+      // Require project selection
+      if (!selectedProjectId) {
+        setAttemptedSubmit(true);
+        alert('Please select a project before submitting your evaluation.');
+        return;
+      }
       const evaluationData = {
         ratings,
         feedback,
-        submittedAt: new Date().toISOString()
+        submittedAt: new Date().toISOString(),
+        projectId: Number(selectedProjectId),
+        evaluationYear: selectedYear,
+        evaluationQuarter: selectedQuarter,
       };
       
       console.log('Submitting evaluation:', evaluationData);
       
-      // Submit to backend API
-      const response = await fetch('http://localhost:8084/api/evaluations/self', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(evaluationData)
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Evaluation submitted successfully:', result);
-        setSubmitted(true);
-        queryClient.invalidateQueries(['evaluations']);
-      } else {
-        console.error('Failed to submit evaluation:', response.statusText);
-        // You could add error handling here
-      }
+      // Submit to backend API via axios instance (adds dev headers)
+      const result = await submitEvaluation(evaluationData);
+      console.log('Evaluation submitted successfully:', result);
+      setSubmitted(true);
+      queryClient.invalidateQueries(['evaluations']);
     } catch (error) {
       console.error('Error submitting evaluation:', error);
-      // You could add error handling here
+      const msg = (error?.response?.data?.message || error?.message || 'Failed to submit evaluation');
+      const lower = String(msg).toLowerCase();
+      if (lower.includes('already submitted') || lower.includes('already') && lower.includes('quarter')) {
+        // Treat as non-fatal: user has already submitted for this project+quarter+year
+        toast((t) => (
+          <span>
+            You have already submitted for this Project and Quarter/Year.<br />
+            We’ve kept your existing submission.
+          </span>
+        ));
+        setSubmitted(true);
+        return;
+      }
+      toast.error(msg);
     }
   };
 
@@ -161,84 +211,141 @@ const SelfEvaluationForm = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 sm:p-8">
+        {/* Project & Timeline Selection */}
+        <div className="bg-white border-2 rounded-2xl p-6 mb-8">
+          <h3 className="text-xl font-semibold text-secondary mb-3">Project</h3>
+          <p className="text-secondary/70 text-sm mb-4">Select the project this self-evaluation is for. This is required.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Project */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Project</label>
+              <select
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors bg-white"
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                disabled={myProjectsLoading}
+                required
+              >
+                <option value="">{myProjectsLoading ? 'Loading your projects...' : 'Select a project'}</option>
+                {Array.isArray(myProjects) && myProjects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {attemptedSubmit && !selectedProjectId && (
+                <p className="text-xs text-red-600 mt-2">Project is required.</p>
+              )}
+            </div>
+            {/* Year */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Year</label>
+              <select
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors bg-white"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+              >
+                {Array.from({ length: 6 }).map((_, i) => {
+                  const year = defaultYear - 2 + i; // two years back to three ahead
+                  return <option key={year} value={year}>{year}</option>;
+                })}
+              </select>
+            </div>
+            {/* Quarter */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Quarter</label>
+              <select
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors bg-white"
+                value={selectedQuarter}
+                onChange={(e) => setSelectedQuarter(parseInt(e.target.value, 10))}
+              >
+                <option value={1}>Q1 (Jan - Mar)</option>
+                <option value={2}>Q2 (Apr - Jun)</option>
+                <option value={3}>Q3 (Jul - Sep)</option>
+                <option value={4}>Q4 (Oct - Dec)</option>
+              </select>
+            </div>
+          </div>
+        </div>
         {/* Competencies Grid */}
         <div className="grid gap-8 mb-12">
-          {competencies.map((competency, index) => {
-            const isRated = ratings[competency.id];
-            const rating = ratings[competency.id];
-            
-            return (
-              <div 
-                key={competency.id} 
-                className={`bg-white border-2 rounded-2xl p-6 transition-all duration-300 hover:shadow-lg ${
-                  isRated ? 'border-primary/30 shadow-md' : 'border-gray-200 hover:border-primary/20'
-                }`}
-              >
-                {/* Competency Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="text-2xl">{competency.icon}</div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-secondary flex items-center gap-2">
-                        {competency.name}
-                        <span className="text-xs bg-primary/20 text-secondary px-2 py-1 rounded-full">
-                          {competency.category}
-                        </span>
-                      </h3>
-                      <p className="text-secondary/70 text-sm mt-1">{competency.description}</p>
+          {competencies.length === 0 ? (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+              <div className="text-yellow-600 mb-2">
+                <svg className="w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.314 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-yellow-800 mb-2">No Evaluation Questions Available</h3>
+              <p className="text-yellow-700 text-sm">
+                No Key Evaluation Questions (KEQs) are configured for the selected time period. 
+                Please contact your administrator to set up evaluation questions.
+              </p>
+            </div>
+          ) : (
+            competencies.map((competency) => (
+              <div key={competency.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start space-x-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-xl flex items-center justify-center">
+                      <competency.icon className="w-6 h-6 text-primary" />
                     </div>
                   </div>
-                  {isRated && (
-                    <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getRatingColor(rating)}`}>
-                      {rating}/5
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-lg font-semibold text-secondary">{competency.name}</h4>
+                      <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full font-medium">
+                        {competency.category}
+                      </span>
                     </div>
-                  )}
-                </div>
+                    <p className="text-secondary/70 text-sm mb-4">
+                      {competency.description}
+                    </p>
 
-                {/* Rating Scale */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-secondary/80">
-                    Rate your performance (1 = Needs Improvement, 5 = Outstanding)
-                  </label>
-                  
-                  <div className="flex items-center justify-between bg-gray-50 rounded-xl p-4">
-                    {[1, 2, 3, 4, 5].map((ratingValue) => (
-                      <label 
-                        key={ratingValue} 
-                        className="flex flex-col items-center cursor-pointer group"
-                      >
-                        <input
-                          type="radio"
-                          name={competency.id}
-                          value={ratingValue}
-                          checked={ratings[competency.id] === ratingValue}
-                          onChange={() => handleRatingChange(competency.id, ratingValue)}
-                          className="sr-only"
-                          required
-                        />
-                        <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold transition-all duration-200 ${
-                          ratings[competency.id] === ratingValue
-                            ? getRatingColor(ratingValue)
-                            : 'border-gray-300 text-gray-400 hover:border-primary hover:text-primary'
-                        } group-hover:scale-110`}>
-                          {ratingValue}
-                        </div>
-                        <span className="text-xs text-secondary/60 mt-1 text-center leading-tight">
-                          {ratingDescriptions[ratingValue]}
-                        </span>
+                    {/* Rating Scale */}
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-secondary/80">
+                        Rate your performance (1 = Needs Improvement, 5 = Outstanding)
                       </label>
-                    ))}
+                      
+                      <div className="flex items-center justify-between bg-gray-50 rounded-xl p-4">
+                        {[1, 2, 3, 4, 5].map((ratingValue) => (
+                          <label 
+                            key={ratingValue} 
+                            className="flex flex-col items-center cursor-pointer group"
+                          >
+                            <input
+                              type="radio"
+                              name={competency.id}
+                              value={ratingValue}
+                              checked={ratings[competency.name] === ratingValue}
+                              onChange={() => handleRatingChange(competency.id, ratingValue)}
+                              className="sr-only"
+                              required
+                            />
+                            <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-lg font-bold transition-all duration-200 ${
+                              ratings[competency.name] === ratingValue
+                                ? getRatingColor(ratingValue)
+                                : 'border-gray-300 text-gray-400 hover:border-primary hover:text-primary'
+                            } group-hover:scale-110`}>
+                              {ratingValue}
+                            </div>
+                            <span className="text-xs text-secondary/60 mt-1 text-center leading-tight">
+                              {ratingDescriptions[ratingValue]}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
 
         {/* Additional Feedback Section */}
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 mb-8">
           <h3 className="text-xl font-semibold text-secondary mb-3 flex items-center gap-2">
-            <span>📝</span>
+            <PencilSquareIcon className="w-5 h-5" />
             Additional Insights & Feedback
           </h3>
           <p className="text-secondary/70 text-sm mb-4">
@@ -271,16 +378,16 @@ const SelfEvaluationForm = () => {
           </button>
           <button
             type="submit"
-            disabled={Object.keys(ratings).length < competencies.length}
+            disabled={competencies.some(c => !ratings[c.name])}
             className="px-8 py-3 bg-secondary text-white rounded-xl font-medium hover:bg-secondary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
             Submit Evaluation
-            {Object.keys(ratings).length < competencies.length && (
+            {competencies.some(c => !ratings[c.name]) && (
               <span className="text-xs bg-white/20 px-2 py-1 rounded">
-                {competencies.length - Object.keys(ratings).length} remaining
+                {competencies.filter(c => !ratings[c.name]).length} remaining
               </span>
             )}
           </button>

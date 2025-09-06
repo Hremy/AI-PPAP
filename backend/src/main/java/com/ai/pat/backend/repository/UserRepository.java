@@ -1,5 +1,6 @@
 package com.ai.pat.backend.repository;
 
+import com.ai.pat.backend.model.Project;
 import com.ai.pat.backend.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -28,4 +29,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     
     @Query("SELECT u FROM User u WHERE u.department = :department")
     List<User> findByDepartment(@Param("department") String department);
+
+    @Query("SELECT DISTINCT u FROM User u JOIN u.projects p JOIN u.roles r WHERE p IN :projects AND r = :role")
+    List<User> findByProjectsAndRole(@Param("projects") List<Project> projects, @Param("role") String role);
+
+    @Query("SELECT DISTINCT u FROM User u JOIN u.managedProjects mp WHERE mp IN :projects")
+    List<User> findManagersByManagedProjects(@Param("projects") List<Project> projects);
+
+    @Query("SELECT DISTINCT u FROM User u JOIN u.managedProjects mp WHERE mp.id IN :projectIds")
+    List<User> findManagersByManagedProjectIds(@Param("projectIds") List<Long> projectIds);
 }

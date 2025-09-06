@@ -3,6 +3,7 @@ package com.ai.pat.backend.config;
 import org.springframework.dao.DataIntegrityViolationException;
 import jakarta.persistence.PersistenceException;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -39,6 +40,15 @@ public class GlobalExceptionHandler {
                 "success", false,
                 "error", ex.getClass().getSimpleName(),
                 "message", ex.getMessage()
+        ));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode()).body(Map.of(
+                "success", false,
+                "error", ex.getClass().getSimpleName(),
+                "message", ex.getReason() != null ? ex.getReason() : ex.getMessage()
         ));
     }
 
