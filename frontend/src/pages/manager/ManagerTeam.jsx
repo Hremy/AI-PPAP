@@ -5,6 +5,7 @@ function ManagerTeam() {
   const { currentUser, hasRole } = useAuth();
   const [projects, setProjects] = useState([]);
   const [team, setTeam] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -38,6 +39,7 @@ function ManagerTeam() {
         if (!cancelled) {
           setProjects(Array.isArray(projData) ? projData : []);
           setTeam(Array.isArray(teamData) ? teamData : []);
+          setSelectedProjectId('ALL');
         }
       } catch (e) {
         if (!cancelled) setError(e.message || 'Failed to load team data');
@@ -49,6 +51,30 @@ function ManagerTeam() {
     load();
     return () => { cancelled = true; };
   }, [devHeaders]);
+
+  // Handler: when selecting a project, fetch members for that project
+  const handleSelectProject = async (pid) => {
+    setSelectedProjectId(pid);
+    setLoading(true);
+    setError(null);
+    try {
+      if (pid === 'ALL') {
+        const res = await fetch('/api/v1/manager/team', { headers: devHeaders });
+        if (!res.ok) throw new Error(`Team request failed: ${res.status}`);
+        const data = await res.json();
+        setTeam(Array.isArray(data) ? data : []);
+      } else {
+        const res = await fetch(`/api/v1/manager/team/${pid}`, { headers: devHeaders });
+        if (!res.ok) throw new Error(`Team by project failed: ${res.status}`);
+        const data = await res.json();
+        setTeam(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to load team by project');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!hasRole('MANAGER') && !hasRole('ADMIN')) {
     return (
@@ -85,11 +111,28 @@ function ManagerTeam() {
                 {projects.length === 0 ? (
                   <p className="text-sm text-gray-500">No projects assigned.</p>
                 ) : (
-                  <ul className="space-y-2">
-                    {projects.map((p) => (
-                      <li key={p.id} className="px-3 py-2 rounded border border-gray-100 bg-gray-50">{p.name}</li>
-                    ))}
-                  </ul>
+                  <>
+                    <div className="mb-2">
+                      <button
+                        onClick={() => handleSelectProject('ALL')}
+                        className={`w-full text-left px-3 py-2 rounded border transition ${selectedProjectId === 'ALL' ? 'border-primary/30 bg-primary/10 text-primary' : 'border-gray-100 bg-gray-50 hover:bg-gray-100'}`}
+                      >
+                        All
+                      </button>
+                    </div>
+                    <ul className="space-y-2">
+                      {projects.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            onClick={() => handleSelectProject(p.id)}
+                            className={`w-full text-left px-3 py-2 rounded border transition ${selectedProjectId === p.id ? 'border-primary/30 bg-primary/10 text-primary' : 'border-gray-100 bg-gray-50 hover:bg-gray-100'}`}
+                          >
+                            {p.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </div>
             </div>

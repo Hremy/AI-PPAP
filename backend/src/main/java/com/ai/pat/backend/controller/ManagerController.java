@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -89,6 +90,37 @@ public class ManagerController {
                         .collect(Collectors.toList()))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.ok(List.of()));
+    }
+
+    @GetMapping("/team/{projectId}")
+    public ResponseEntity<List<Map<String, Object>>> getManagedTeamByProject(@PathVariable("projectId") Long projectId) {
+        Long managerId = resolveCurrentUserId();
+        if (managerId == null || projectId == null) {
+            return ResponseEntity.ok(new java.util.ArrayList<>());
+        }
+
+        List<Map<String, Object>> payload = new java.util.ArrayList<>();
+        try {
+            java.util.Optional<User> opt = userRepository.findById(managerId);
+            if (opt.isEmpty()) return ResponseEntity.ok(payload);
+            java.util.Set<Project> managed = opt.get().getManagedProjects();
+            if (managed == null || managed.isEmpty()) return ResponseEntity.ok(payload);
+            Project target = managed.stream().filter(p -> p != null && projectId.equals(p.getId())).findFirst().orElse(null);
+            if (target == null) return ResponseEntity.ok(payload);
+
+            List<User> employees = userRepository.findByProjectsAndRole(java.util.List.of(target), "EMPLOYEE");
+            for (User u : employees) {
+                Map<String, Object> m = new HashMap<>();
+                m.put("id", u.getId());
+                m.put("username", u.getUsername());
+                m.put("email", u.getEmail());
+                m.put("fullName", u.getFullName());
+                payload.add(m);
+            }
+        } catch (Exception ignore) {
+            // return empty payload on error in demo
+        }
+        return ResponseEntity.ok(payload);
     }
 
     @GetMapping("/team")

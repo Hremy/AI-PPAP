@@ -240,4 +240,30 @@ export const getManagerDashboard = async () => {
   return res.data;
 };
 
+// Evaluations (admin/all)
+export const getEvaluations = async () => {
+  const res = await api.get('/v1/evaluations');
+  return res.data;
+};
+
 export default api;
+// KEQs (Admin CRUD)
+export const getKEQs = async (params = {}) => {
+  const res = await api.get('/v1/keqs', { params });
+  return res.data;
+};
+
+export const createKEQ = async (payload) => {
+  const res = await api.post('/v1/keqs', payload);
+  return res.data;
+};
+
+export const updateKEQ = async (id, payload) => {
+  const res = await api.put(`/v1/keqs/${id}`, payload);
+  return res.data;
+};
+
+export const deleteKEQ = async (id) => {
+  const res = await api.delete(`/v1/keqs/${id}`);
+  return res.data;
+};

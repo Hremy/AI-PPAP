@@ -9,12 +9,14 @@ import {
   ArrowLeftIcon,
   UserIcon,
   FolderIcon,
+  QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: Squares2X2Icon },
   { name: 'Evaluations', href: '/admin/evaluations', icon: DocumentTextIcon },
   { name: 'Projects', href: '/admin/projects', icon: FolderIcon },
+  { name: 'KEQs', href: '/admin/keqs', icon: QuestionMarkCircleIcon },
   { name: 'User Roles', href: '/admin/user-roles', icon: UsersIcon },
   { name: 'Profile', href: '/admin/profile', icon: UserIcon },
   { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },

@@ -5,7 +5,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 
-const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
+const ScoreBasedEvaluationTable = ({ selectedProjectIds = [], showOnlyReviewed = false }) => {
   const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,6 +17,7 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
   
   const queryClient = useQueryClient();
   const { hasRole, currentUser } = useAuth();
+  const isAdmin = hasRole('ADMIN');
 
   // Competencies that should be displayed as columns
   const competencies = [
@@ -160,8 +161,8 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
       return response.json();
     },
     onSuccess: () => {
+      // Silent refresh without popup
       queryClient.invalidateQueries({ queryKey: ['evaluations'] });
-      toast.success('Evaluation deleted successfully');
       setDeleteConfirmation({ isOpen: false, evaluationId: null, employeeName: '' });
     },
     onError: (error) => {
@@ -197,60 +198,85 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
     });
   }, [evaluations, selectedProjectIds]);
 
-  // Get available months from project-filtered evaluations
-  const availableMonths = useMemo(() => {
-    const months = new Set();
+  // Get available years from project-filtered evaluations
+  const availableYears = useMemo(() => {
+    const years = new Set();
     projectFilteredEvaluations.forEach(evaluation => {
+      const yy = evaluation?.evaluationYear;
+      if (yy) { years.add(String(yy)); return; }
       if (evaluation.submittedAt) {
         const date = new Date(evaluation.submittedAt);
-        const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        months.add(monthYear);
+        years.add(String(date.getFullYear()));
       }
     });
-    return Array.from(months).sort().reverse();
+    return Array.from(years).sort().reverse();
   }, [projectFilteredEvaluations]);
 
-  // Filter evaluations by selected month
+  // Filter evaluations by selected year
   const filteredEvaluations = useMemo(() => {
-    const base = projectFilteredEvaluations;
+    let base = projectFilteredEvaluations;
     if (selectedMonth === 'all') return base;
-    return base.filter(evaluation => {
+    const targetYear = parseInt(selectedMonth, 10);
+    base = base.filter(evaluation => {
+      const yy = evaluation?.evaluationYear;
+      if (yy && yy === targetYear) return true;
       if (!evaluation.submittedAt) return false;
       const date = new Date(evaluation.submittedAt);
-      const monthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      return monthYear === selectedMonth;
+      return date.getFullYear() === targetYear;
     });
+    // When requested, only show items that have been graded by manager
+    if (showOnlyReviewed) {
+      base = base.filter(e => {
+        const hasMgrOverall = e.managerRating != null;
+        const mgrCompCount = e.managerCompetencyRatings ? Object.keys(e.managerCompetencyRatings).length : 0;
+        return e.status === 'REVIEWED' || hasMgrOverall || mgrCompCount > 0;
+      });
+    }
+    return base;
   }, [projectFilteredEvaluations, selectedMonth]);
 
-  // Group evaluations by month
+  // Helper: get quarter-year label
+  const getQuarterYearLabel = (evaluation) => {
+    const ym = evaluation?.evaluationMonth;
+    const yy = evaluation?.evaluationYear;
+    if (yy && ym) {
+      const q = Math.floor((Number(ym) - 1) / 3) + 1;
+      return `Q${q} ${yy}`;
+    }
+    // Fallback from submittedAt
+    if (evaluation?.submittedAt) {
+      const d = new Date(evaluation.submittedAt);
+      const q = Math.floor(d.getMonth() / 3) + 1;
+      return `Q${q} ${d.getFullYear()}`;
+    }
+    return 'No Timeline';
+  };
+
+  // Group evaluations by quarter
   const groupedEvaluations = useMemo(() => {
     if (!groupByMonth) return { 'All Evaluations': filteredEvaluations };
-    
+
     const groups = {};
     filteredEvaluations.forEach(evaluation => {
-      if (!evaluation.submittedAt) {
-        if (!groups['No Date']) groups['No Date'] = [];
-        groups['No Date'].push(evaluation);
-        return;
-      }
-      
-      const date = new Date(evaluation.submittedAt);
-      const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      
-      if (!groups[monthName]) groups[monthName] = [];
-      groups[monthName].push(evaluation);
+      const key = getQuarterYearLabel(evaluation);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(evaluation);
     });
-    
-    // Sort groups by date (newest first)
+
+    // Sort groups like 'Q4 2025', 'Q3 2025', ...
+    const parseKey = (k) => {
+      const m = /^Q(\d)\s+(\d{4})$/.exec(k);
+      if (!m) return { y: -Infinity, q: -Infinity };
+      return { y: Number(m[2]), q: Number(m[1]) };
+    };
     const sortedGroups = {};
-    Object.keys(groups).sort((a, b) => {
-      if (a === 'No Date') return 1;
-      if (b === 'No Date') return -1;
-      return new Date(b) - new Date(a);
-    }).forEach(key => {
-      sortedGroups[key] = groups[key];
-    });
-    
+    Object.keys(groups)
+      .sort((a, b) => {
+        const pa = parseKey(a), pb = parseKey(b);
+        if (pa.y !== pb.y) return pb.y - pa.y;
+        return pb.q - pa.q;
+      })
+      .forEach(key => { sortedGroups[key] = groups[key]; });
     return sortedGroups;
   }, [filteredEvaluations, groupByMonth]);
 
@@ -292,6 +318,15 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
+    });
+  };
+
+  const formatTime = (dateString) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
     });
   };
 
@@ -382,8 +417,21 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
   const renderScoreCell = (evaluation, competency) => {
     const key = `${evaluation.id}-${competency.id}`;
     const isEditing = editingScores[key];
-    const employeeScore = evaluation.competencyRatings?.[competency.id];
-    const managerScore = evaluation.managerCompetencyRatings?.[competency.id];
+    // Backend returns title-cased competency keys (e.g., 'Technical Skills'), while
+    // our UI competency ids are snake_case (e.g., 'technical_skills'). Read both.
+    const titleMap = {
+      technical_skills: 'Technical Skills',
+      communication: 'Communication',
+      problem_solving: 'Problem Solving',
+      teamwork: 'Teamwork',
+      leadership: 'Leadership',
+      adaptability: 'Adaptability',
+      time_management: 'Time Management',
+      quality_focus: 'Quality Focus',
+    };
+    const titleKey = titleMap[competency.id] || competency.name;
+    const employeeScore = (evaluation.competencyRatings?.[competency.id] ?? evaluation.competencyRatings?.[titleKey]);
+    const managerScore = (evaluation.managerCompetencyRatings?.[competency.id] ?? evaluation.managerCompetencyRatings?.[titleKey]);
     
     return (
       <td key={competency.id} className="px-4 py-4 border-r border-gray-200">
@@ -408,7 +456,6 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
                 </button>
               )}
             </div>
-            
             {isEditing ? (
               <div className="flex items-center space-x-1">
                 <select
@@ -478,24 +525,22 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <CalendarIcon className="w-5 h-5 text-gray-500" />
-              <label className="text-sm font-medium text-gray-700">Filter by Month:</label>
+              <label className="text-sm font-medium text-gray-700">Filter by Year:</label>
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="all">All Months</option>
-                {availableMonths.map(month => (
-                  <option key={month} value={month}>
-                    {formatMonthYear(month)}
-                  </option>
+                <option value="all">All Years</option>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
                 ))}
               </select>
             </div>
           </div>
           
           <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Group by Month:</label>
+            <label className="text-sm font-medium text-gray-700">Group by Quarter:</label>
             <input
               type="checkbox"
               checked={groupByMonth}
@@ -516,17 +561,17 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-300">
+          <table className="min-w-full table-fixed divide-y divide-gray-300">
             <thead className="bg-gray-50">
               <tr className="divide-x divide-gray-300">
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
                   Employee
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 w-[12rem] min-w-[12rem]">
                   Overall Rating
                 </th>
                 {competencies.map((competency) => (
-                  <th key={competency.id} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                  <th key={competency.id} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300 w-[12rem] min-w-[12rem]">
                     <div className="text-center">
                       {competency.name}
                     </div>
@@ -536,11 +581,19 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
+                  Manager
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r border-gray-300">
                   Submitted Date
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
+                  Timeline
                 </th>
+                {!isAdmin && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-300">
@@ -548,7 +601,7 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
                 <React.Fragment key={monthName}>
                   {groupByMonth && (
                     <tr className="bg-gray-100">
-                      <td colSpan={competencies.length + 5} className="px-6 py-3 text-sm font-semibold text-gray-800 border-b border-gray-300">
+                      <td colSpan={competencies.length + (isAdmin ? 5 : 6)} className="px-6 py-3 text-sm font-semibold text-gray-800 border-b border-gray-300">
                         <div className="flex items-center space-x-2">
                           <CalendarIcon className="w-4 h-4" />
                           <span>{monthName}</span>
@@ -569,7 +622,7 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 border-r border-gray-200">
+                  <td className="px-6 py-4 border-r border-gray-200 w-[12rem] min-w-[12rem]">
                     <div className="space-y-2">
                       {/* Employee Overall Rating */}
                       <div className="bg-blue-50 rounded-lg p-2">
@@ -593,18 +646,29 @@ const ScoreBasedEvaluationTable = ({ selectedProjectIds = [] }) => {
                   <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
                     {getStatusBadge(evaluation.status)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-200">
-                    {formatDate(evaluation.submittedAt)}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border-r border-gray-200">
+                    {evaluation.reviewerName || '—'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button 
-                      onClick={() => handleDeleteClick(evaluation)}
-                      className="text-[#002035] hover:text-[#002035]/80 transition-colors flex items-center"
-                      title="Delete evaluation"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 border-r border-gray-200">
+                    <div className="leading-tight">
+                      <div>{formatDate(evaluation.submittedAt)}</div>
+                      <div className="text-xs text-gray-500">{formatTime(evaluation.submittedAt)}</div>
+                    </div>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {getQuarterYearLabel(evaluation)}
+                  </td>
+                  {!isAdmin && (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button 
+                        onClick={() => handleDeleteClick(evaluation)}
+                        className="text-[#002035] hover:text-[#002035]/80 transition-colors flex items-center"
+                        title="Delete evaluation"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
                   ))}
                 </React.Fragment>

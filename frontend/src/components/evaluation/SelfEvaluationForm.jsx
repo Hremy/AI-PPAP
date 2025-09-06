@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { submitEvaluation, getMyProjects } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
+import toast from 'react-hot-toast';
 import {
   ChatBubbleLeftRightIcon,
   UsersIcon,
@@ -21,6 +22,13 @@ const SelfEvaluationForm = () => {
   const [currentStep, setCurrentStep] = useState(0);
   // Projects state
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  // Timeline state (Year/Quarter)
+  const now = new Date();
+  const defaultYear = now.getFullYear();
+  const defaultQuarter = Math.floor(now.getMonth() / 3) + 1; // 1..4
+  const [selectedYear, setSelectedYear] = useState(defaultYear);
+  const [selectedQuarter, setSelectedQuarter] = useState(defaultQuarter);
   const { data: myProjects = [], isLoading: myProjectsLoading } = useQuery({
     queryKey: ['my-projects', currentUser?.email || currentUser?.username],
     queryFn: async () => {
@@ -92,11 +100,19 @@ const SelfEvaluationForm = () => {
     e.preventDefault();
     
     try {
+      // Require project selection
+      if (!selectedProjectId) {
+        setAttemptedSubmit(true);
+        alert('Please select a project before submitting your evaluation.');
+        return;
+      }
       const evaluationData = {
         ratings,
         feedback,
         submittedAt: new Date().toISOString(),
-        projectId: selectedProjectId ? Number(selectedProjectId) : undefined,
+        projectId: Number(selectedProjectId),
+        evaluationYear: selectedYear,
+        evaluationQuarter: selectedQuarter,
       };
       
       console.log('Submitting evaluation:', evaluationData);
@@ -108,7 +124,20 @@ const SelfEvaluationForm = () => {
       queryClient.invalidateQueries(['evaluations']);
     } catch (error) {
       console.error('Error submitting evaluation:', error);
-      // You could add error handling here
+      const msg = (error?.response?.data?.message || error?.message || 'Failed to submit evaluation');
+      const lower = String(msg).toLowerCase();
+      if (lower.includes('already submitted') || lower.includes('already') && lower.includes('quarter')) {
+        // Treat as non-fatal: user has already submitted for this project+quarter+year
+        toast((t) => (
+          <span>
+            You have already submitted for this Project and Quarter/Year.<br />
+            We’ve kept your existing submission.
+          </span>
+        ));
+        setSubmitted(true);
+        return;
+      }
+      toast.error(msg);
     }
   };
 
@@ -175,25 +204,58 @@ const SelfEvaluationForm = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 sm:p-8">
-        {/* Project Selection */}
+        {/* Project & Timeline Selection */}
         <div className="bg-white border-2 rounded-2xl p-6 mb-8">
           <h3 className="text-xl font-semibold text-secondary mb-3">Project</h3>
-          <p className="text-secondary/70 text-sm mb-4">Select the project this self-evaluation is for.</p>
-          <div className="max-w-md">
-            <select
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors bg-white"
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              disabled={myProjectsLoading}
-            >
-              <option value="">{myProjectsLoading ? 'Loading your projects...' : 'Select a project (optional)'}</option>
-              {Array.isArray(myProjects) && myProjects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            {Array.isArray(myProjects) && myProjects.length > 0 && !selectedProjectId && (
-              <p className="text-xs text-secondary/60 mt-2">Tip: Choose a project to tie this evaluation to a specific context.</p>
-            )}
+          <p className="text-secondary/70 text-sm mb-4">Select the project this self-evaluation is for. This is required.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Project */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Project</label>
+              <select
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors bg-white"
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                disabled={myProjectsLoading}
+                required
+              >
+                <option value="">{myProjectsLoading ? 'Loading your projects...' : 'Select a project'}</option>
+                {Array.isArray(myProjects) && myProjects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {attemptedSubmit && !selectedProjectId && (
+                <p className="text-xs text-red-600 mt-2">Project is required.</p>
+              )}
+            </div>
+            {/* Year */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Year</label>
+              <select
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors bg-white"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+              >
+                {Array.from({ length: 6 }).map((_, i) => {
+                  const year = defaultYear - 2 + i; // two years back to three ahead
+                  return <option key={year} value={year}>{year}</option>;
+                })}
+              </select>
+            </div>
+            {/* Quarter */}
+            <div>
+              <label className="block text-sm font-medium text-secondary mb-2">Quarter</label>
+              <select
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-colors bg-white"
+                value={selectedQuarter}
+                onChange={(e) => setSelectedQuarter(parseInt(e.target.value, 10))}
+              >
+                <option value={1}>Q1 (Jan - Mar)</option>
+                <option value={2}>Q2 (Apr - Jun)</option>
+                <option value={3}>Q3 (Jul - Sep)</option>
+                <option value={4}>Q4 (Oct - Dec)</option>
+              </select>
+            </div>
           </div>
         </div>
         {/* Competencies Grid */}
