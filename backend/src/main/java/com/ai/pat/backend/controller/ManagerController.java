@@ -3,7 +3,6 @@ package com.ai.pat.backend.controller;
 import com.ai.pat.backend.dto.EvaluationDTO;
 import com.ai.pat.backend.model.Project;
 import com.ai.pat.backend.model.User;
-import com.ai.pat.backend.repository.ProjectRepository;
 import com.ai.pat.backend.repository.UserRepository;
 import com.ai.pat.backend.service.EvaluationService;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -28,7 +26,6 @@ public class ManagerController {
 
     private final EvaluationService evaluationService;
     private final UserRepository userRepository;
-    private final ProjectRepository projectRepository;
 
     /**
      * Returns aggregated dashboard stats for the current manager.

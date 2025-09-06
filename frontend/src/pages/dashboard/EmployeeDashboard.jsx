@@ -362,35 +362,6 @@ const EmployeeDashboard = () => {
               )}
             </div>
 
-            {/* Recent Activity */}
-            <h2 className="text-xl font-semibold text-secondary mb-6">Recent Activity</h2>
-            <div className="bg-white rounded-xl shadow-sm border border-primary/10 p-6">
-              <div className="space-y-4">
-                {recentActivities.map((activity) => (
-                  <div key={activity.id} className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      {activity.status === 'new' ? (
-                        <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
-                      ) : (
-                        <div className="w-2 h-2 bg-secondary/30 rounded-full mt-2"></div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-secondary">{activity.title}</p>
-                      <p className="text-xs text-secondary/70">{activity.date}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 pt-4 border-t border-primary/10">
-                <Link 
-                  to="/activity" 
-                  className="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
-                >
-                  View all activity →
-                </Link>
-              </div>
-            </div>
           </div>
         </div>
 
