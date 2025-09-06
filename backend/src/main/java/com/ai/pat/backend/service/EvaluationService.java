@@ -9,7 +9,8 @@ import com.ai.pat.backend.repository.EvaluationRepository;
 import com.ai.pat.backend.repository.ProjectRepository;
 import com.ai.pat.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.access.AccessDeniedException;
@@ -23,8 +24,9 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class EvaluationService {
+    
+    private static final Logger log = LoggerFactory.getLogger(EvaluationService.class);
 
     private final EvaluationRepository evaluationRepository;
     private final UserRepository userRepository;
@@ -354,57 +356,6 @@ public class EvaluationService {
             throw new AccessDeniedException("You are not authorized to grade this employee");
         }
 
-        evaluation.setManagerRating(rating);
-        evaluation.setReviewedAt(LocalDateTime.now());
-        
-        Evaluation savedEvaluation = evaluationRepository.save(evaluation);
-        log.info("Updated manager overall rating for evaluation {} to {}", evaluationId, rating);
-        
-        return EvaluationDTO.fromEntity(savedEvaluation);
-    }
-
-    public int createMonthlyEvaluations(Integer month, Integer year) {
-        log.info("Creating monthly evaluations for {}/{}", month, year);
-        
-        // Get all employees (users with ROLE_EMPLOYEE)
-        List<User> employees = userRepository.findAll().stream()
-            .filter(user -> user.getRoles().contains("ROLE_EMPLOYEE"))
-            .collect(Collectors.toList());
-        int createdCount = 0;
-        
-        for (User employee : employees) {
-            // Check if evaluation already exists for this employee in this month/year
-            List<Evaluation> existingEvaluations = evaluationRepository.findByEmployeeId(employee.getId());
-            boolean exists = existingEvaluations.stream()
-                .anyMatch(eval -> month.equals(eval.getEvaluationMonth()) && year.equals(eval.getEvaluationYear()));
-            
-            if (!exists) {
-                Evaluation evaluation = new Evaluation();
-                evaluation.setEmployee(employee);
-                evaluation.setEmployeeName(employee.getFirstName() + " " + employee.getLastName());
-                evaluation.setEmployeeEmail(employee.getEmail());
-                evaluation.setEvaluationMonth(month);
-                evaluation.setEvaluationYear(year);
-                evaluation.setStatus(Evaluation.EvaluationStatus.DRAFT);
-                evaluation.setOverallRating(0); // Default rating
-                
-                evaluationRepository.save(evaluation);
-                createdCount++;
-                
-                log.info("Created evaluation for employee: {} for {}/{}", 
-                    employee.getEmail(), month, year);
-            }
-        }
-        
-        log.info("Created {} monthly evaluations for {}/{}", createdCount, month, year);
-        return createdCount;
-    }
-
-    @Transactional
-    public EvaluationDTO updateManagerOverallRating(Long evaluationId, Long managerId, Integer rating) {
-        Evaluation evaluation = evaluationRepository.findById(evaluationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Evaluation not found with id: " + evaluationId));
-        
         evaluation.setManagerRating(rating);
         evaluation.setReviewedAt(LocalDateTime.now());
         

@@ -13,7 +13,7 @@ import {
 import toast from 'react-hot-toast';
 
 const AdminProfile = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, updateUser } = useAuth();
   const queryClient = useQueryClient();
   
   const [profileData, setProfileData] = useState({
@@ -39,7 +39,9 @@ const AdminProfile = () => {
     queryFn: async () => {
       const response = await fetch('http://localhost:8084/api/v1/users/profile', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          'X-User': currentUser?.username || currentUser?.email || '',
+          'X-Roles': (currentUser?.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',')
         }
       });
       
@@ -50,14 +52,17 @@ const AdminProfile = () => {
       return response.json();
     },
     onSuccess: (data) => {
-      setProfileData({
+      const normalized = {
         firstName: data.firstName || '',
         lastName: data.lastName || '',
         email: data.email || '',
         phone: data.phone || '',
         department: data.department || '',
         position: data.position || ''
-      });
+      };
+      setProfileData(normalized);
+      // Keep the sidebar (AuthContext) in sync with the latest profile values
+      updateUser(normalized);
     }
   });
 
@@ -68,7 +73,9 @@ const AdminProfile = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          'X-User': currentUser?.username || currentUser?.email || '',
+          'X-Roles': (currentUser?.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',')
         },
         body: JSON.stringify(data)
       });
@@ -80,8 +87,18 @@ const AdminProfile = () => {
       
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries(['adminProfile']);
+      // Update AuthContext so sidebar reflects latest name immediately
+      const updated = {
+        firstName: res?.firstName ?? profileData.firstName,
+        lastName: res?.lastName ?? profileData.lastName,
+        email: res?.email ?? profileData.email,
+        phone: res?.phone ?? profileData.phone,
+        department: res?.department ?? profileData.department,
+        position: res?.position ?? profileData.position,
+      };
+      updateUser(updated);
       toast.success('Profile updated successfully!');
     },
     onError: (error) => {
@@ -96,7 +113,9 @@ const AdminProfile = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`
+          'Authorization': `Bearer ${localStorage.getItem('ai_ppap_auth_token')}`,
+          'X-User': currentUser?.username || currentUser?.email || '',
+          'X-Roles': (currentUser?.roles || []).map(r => r.startsWith('ROLE_') ? r.slice(5) : r).join(',')
         },
         body: JSON.stringify(data)
       });

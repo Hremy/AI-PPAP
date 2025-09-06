@@ -9,6 +9,8 @@ import com.ai.pat.backend.controller.dto.ai.SummarizeResponse;
 import com.ai.pat.backend.controller.dto.ai.RecommendationsRequest;
 import com.ai.pat.backend.controller.dto.ai.RecommendationsResponse;
 import com.ai.pat.backend.controller.dto.ai.EvaluateRequest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
@@ -22,7 +24,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class AiService {
 
     @Value("${ai.windsurf.api-url:https://api.windsurf.ai}")
@@ -35,7 +39,7 @@ public class AiService {
 
     public DraftEvaluationResponse draftEvaluation(DraftEvaluationRequest req) {
         if (apiKey == null || apiKey.isBlank()) {
-            System.out.println("AI API key is not configured; returning a placeholder draft.");
+            log.warn("AI API key is not configured; returning a placeholder draft.");
             return new DraftEvaluationResponse(
                     "This is a placeholder draft because the AI API key is not configured.",
                     Map.of()
@@ -91,7 +95,7 @@ public class AiService {
             if (summary == null) summary = "AI draft generated, but no textual content returned.";
             return new DraftEvaluationResponse(summary, competencyNotes);
         } catch (Exception ex) {
-            System.err.println("AI draft request failed: " + ex.getMessage());
+            log.error("AI draft request failed: {}", ex.getMessage(), ex);
             throw new RuntimeException("AI drafting failed: " + ex.getMessage(), ex);
         }
     }
@@ -173,7 +177,7 @@ public class AiService {
                     : naiveSummarize(text, 2, 60);
             return new SummarizeResponse(summary);
         } catch (Exception ex) {
-            System.err.println("AI summarize failed: " + ex.getMessage());
+            log.error("AI summarize failed: {}", ex.getMessage(), ex);
             return new SummarizeResponse(naiveSummarize(text, 2, 60));
         }
     }
@@ -228,25 +232,20 @@ public class AiService {
         if (req.getSelfText() != null) texts.add(req.getSelfText());
         if (req.getManagerText() != null) texts.add(req.getManagerText());
         if (req.getPeerTexts() != null) texts.addAll(req.getPeerTexts());
-        AnalyzeTextRequest analyzeRequest = new AnalyzeTextRequest();
-        analyzeRequest.setTexts(texts);
-        AnalyzeTextResponse sentiments = analyzeText(analyzeRequest);
+        AnalyzeTextResponse sentiments = analyzeText(new AnalyzeTextRequest() {{ setTexts(texts); }});
         result.put("sentiments", sentiments.getSentiments());
 
         // Summary
         String combined = String.join("\n\n", texts);
-        SummarizeRequest summarizeRequest = new SummarizeRequest();
-        summarizeRequest.setText(combined);
-        summarizeRequest.setMaxTokens(200);
-        SummarizeResponse sum = summarize(summarizeRequest);
+        SummarizeResponse sum = summarize(new SummarizeRequest() {{ setText(combined); setMaxTokens(200); }});
         result.put("summary", sum.getSummary());
 
         // Recommendations
-        RecommendationsRequest recommendationsRequest = new RecommendationsRequest();
-        recommendationsRequest.setRole(req.getRole());
-        recommendationsRequest.setCompetencyRatings(req.getCompetencyRatings());
-        recommendationsRequest.setFeedbackText(combined);
-        RecommendationsResponse recs = recommendations(recommendationsRequest);
+        RecommendationsResponse recs = recommendations(new RecommendationsRequest() {{
+            setRole(req.getRole());
+            setCompetencyRatings(req.getCompetencyRatings());
+            setFeedbackText(combined);
+        }});
         result.put("strengths", recs.getStrengths());
         result.put("weaknesses", recs.getWeaknesses());
         result.put("growthAreas", recs.getGrowthAreas());

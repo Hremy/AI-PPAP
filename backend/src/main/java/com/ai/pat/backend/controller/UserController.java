@@ -270,7 +270,7 @@ public class UserController {
     ) {}
 
     public record ChangePasswordRequest(
-        @NotBlank String currentPassword,
+        String currentPassword,
         @NotBlank String newPassword
     ) {}
 
@@ -295,14 +295,8 @@ public class UserController {
                 ));
             }
             
-            // Find and update user
-            User user = userService.findByUsernameOrEmail(userKey);
-            if (user == null) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "User not found"
-                ));
-            }
+            // Find or create user (dev-friendly)
+            User user = userService.ensureUserExists(userKey);
             
             // Update user profile
             user.setFirstName(request.firstName());
@@ -341,39 +335,70 @@ public class UserController {
     }
 
     @PostMapping("/change-password")
-    public ResponseEntity<Map<String, Object>> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+    public ResponseEntity<Map<String, Object>> changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                                              @RequestHeader(value = "X-User", required = false) String xUser) {
         try {
-            // In a real application, you would:
-            // 1. Get the user ID from the JWT token
-            // 2. Verify the current password
-            // 3. Hash and save the new password
-            
-            // Mock password change - replace with actual service call
-            // For demo purposes, we'll simulate validation
-            if (!"current123".equals(request.currentPassword())) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Current password is incorrect"
-                ));
-            }
-            
             if (request.newPassword().length() < 6) {
                 return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "New password must be at least 6 characters"
+                        "success", false,
+                        "message", "New password must be at least 6 characters"
                 ));
             }
-            
-            Map<String, Object> response = Map.of(
-                "success", true,
-                "message", "Password changed successfully"
-            );
-            
-            return ResponseEntity.ok(response);
+
+            // Resolve current user identifier
+            String userKey = xUser;
+            if (userKey == null || userKey.isBlank()) {
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated()) {
+                    userKey = auth.getName();
+                }
+            }
+            if (userKey == null || userKey.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "User not authenticated"
+                ));
+            }
+
+            // Load or create user and validate current password (unless forced change)
+            User user = userService.ensureUserExists(userKey);
+
+            boolean forceChange = user.getRoles() != null && user.getRoles().contains("FORCE_PASSWORD_CHANGE");
+            // Validate current password using the configured encoder only if not force change
+            org.springframework.security.crypto.password.PasswordEncoder encoder =
+                    (org.springframework.security.crypto.password.PasswordEncoder) new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
+            if (!forceChange) {
+                if (request.currentPassword() == null || request.currentPassword().isBlank()) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "Current password is required"
+                    ));
+                }
+                if (!encoder.matches(request.currentPassword(), user.getPassword())) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "success", false,
+                            "message", "Current password is incorrect"
+                    ));
+                }
+            }
+
+            // Save new password and remove FORCE_PASSWORD_CHANGE role if present
+            user.setPassword(encoder.encode(request.newPassword()));
+            if (forceChange) {
+                java.util.Set<String> roles = new java.util.HashSet<>(user.getRoles());
+                roles.remove("FORCE_PASSWORD_CHANGE");
+                user.setRoles(roles);
+            }
+            userService.saveUser(user);
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Password changed successfully"
+            ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "message", "Failed to change password: " + e.getMessage()
+                    "success", false,
+                    "message", "Failed to change password: " + e.getMessage()
             ));
         }
     }
@@ -398,14 +423,8 @@ public class UserController {
                 ));
             }
             
-            // Find user
-            User user = userService.findByUsernameOrEmail(userKey);
-            if (user == null) {
-                return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "User not found"
-                ));
-            }
+            // Find or create user (dev-friendly)
+            User user = userService.ensureUserExists(userKey);
             
             Map<String, Object> userProfile = Map.of(
                 "firstName", user.getFirstName() != null ? user.getFirstName() : "",

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import ManagerLayout from './ManagerLayout';
@@ -12,7 +13,9 @@ import {
 import toast from 'react-hot-toast';
 
 const ManagerProfile = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, updateUser } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   
   const [profileData, setProfileData] = useState({
@@ -31,6 +34,22 @@ const ManagerProfile = () => {
   });
 
   const [activeTab, setActiveTab] = useState('profile');
+  const [forcePwdBanner, setForcePwdBanner] = useState('');
+
+  // Detect forced password change from navigation state or sessionStorage
+  useEffect(() => {
+    let shouldForce = false;
+    try {
+      if (location.state?.forcePasswordChange) shouldForce = true;
+      const flag = sessionStorage.getItem('force_password_change');
+      if (flag === '1') shouldForce = true;
+    } catch (_) {}
+
+    if (shouldForce) {
+      setActiveTab('password');
+      setForcePwdBanner('For security, please set a new password before continuing.');
+    }
+  }, [location.state]);
 
   // Fetch profile data
   const { data: profile, isLoading: profileLoading } = useQuery({
@@ -50,7 +69,9 @@ const ManagerProfile = () => {
       
       return response.json();
     },
+    enabled: !!currentUser,
     onSuccess: (data) => {
+      console.log('Profile data received:', data);
       setProfileData({
         firstName: data.firstName || '',
         lastName: data.lastName || '',
@@ -61,6 +82,20 @@ const ManagerProfile = () => {
       });
     }
   });
+
+  // Effect to populate form when profile data changes
+  useEffect(() => {
+    if (profile) {
+      setProfileData({
+        firstName: profile.firstName || '',
+        lastName: profile.lastName || '',
+        email: profile.email || '',
+        phone: profile.phone || '',
+        department: profile.department || '',
+        position: profile.position || ''
+      });
+    }
+  }, [profile]);
 
   // Update profile mutation
   const updateProfileMutation = useMutation({
@@ -87,14 +122,17 @@ const ManagerProfile = () => {
       queryClient.invalidateQueries(['managerProfile']);
       // Update local state with the response data
       if (data.success !== false) {
-        setProfileData({
+        const updatedProfile = {
           firstName: data.firstName || '',
           lastName: data.lastName || '',
           email: data.email || '',
           phone: data.phone || '',
           department: data.department || '',
           position: data.position || ''
-        });
+        };
+        setProfileData(updatedProfile);
+        // Update the auth context with new profile data
+        updateUser(updatedProfile);
       }
       toast.success(data.message || 'Profile updated successfully!');
     },
@@ -126,6 +164,11 @@ const ManagerProfile = () => {
     },
     onSuccess: (data) => {
       toast.success(data.message || 'Password changed successfully!');
+      // Clear force change flag and optionally redirect to dashboard
+      try { sessionStorage.removeItem('force_password_change'); } catch (_) {}
+      setForcePwdBanner('');
+      // Optionally navigate to manager dashboard after a short delay
+      setTimeout(() => navigate('/manager/dashboard'), 600);
       setPasswordData({
         currentPassword: '',
         newPassword: '',
@@ -174,6 +217,14 @@ const ManagerProfile = () => {
   return (
     <ManagerLayout>
       <div className="space-y-8">
+        {forcePwdBanner && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+            <p className="text-sm text-yellow-800 flex items-center">
+              <ExclamationCircleIcon className="w-5 h-5 mr-2" />
+              {forcePwdBanner}
+            </p>
+          </div>
+        )}
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Manager Profile</h1>

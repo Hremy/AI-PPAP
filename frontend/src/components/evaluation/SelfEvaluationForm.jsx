@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { submitEvaluation, getMyProjects, getKEQs } from '../../lib/api';
+import { submitEvaluation, getMyProjects, getKEQs, checkSelfEvaluationExists } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -29,6 +29,7 @@ const SelfEvaluationForm = () => {
   const defaultQuarter = Math.floor(now.getMonth() / 3) + 1; // 1..4
   const [selectedYear, setSelectedYear] = useState(defaultYear);
   const [selectedQuarter, setSelectedQuarter] = useState(defaultQuarter);
+  const [dupCheck, setDupCheck] = useState({ loading: false, exists: false, info: null });
   const { data: myProjects = [], isLoading: myProjectsLoading } = useQuery({
     queryKey: ['my-projects', currentUser?.email || currentUser?.username],
     queryFn: async () => {
@@ -50,6 +51,29 @@ const SelfEvaluationForm = () => {
       setSelectedProjectId(String(myProjects[0].id));
     }
   }, [myProjects]);
+
+  // Duplicate pre-check whenever project/year/quarter changes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setDupCheck(prev => ({ ...prev, loading: true }));
+        if (!selectedProjectId || !selectedYear || !selectedQuarter) {
+          if (!cancelled) setDupCheck({ loading: false, exists: false, info: null });
+          return;
+        }
+        const data = await checkSelfEvaluationExists({
+          projectId: Number(selectedProjectId),
+          evaluationYear: selectedYear,
+          evaluationQuarter: selectedQuarter,
+        });
+        if (!cancelled) setDupCheck({ loading: false, exists: !!data?.exists, info: data || null });
+      } catch (e) {
+        if (!cancelled) setDupCheck({ loading: false, exists: false, info: null });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedProjectId, selectedYear, selectedQuarter]);
 
   // Helper functions for KEQ processing
   const isEffective = (k, year, quarter) => {
@@ -113,6 +137,14 @@ const SelfEvaluationForm = () => {
         alert('Please select a project before submitting your evaluation.');
         return;
       }
+      if (dupCheck.exists) {
+        toast((t) => (
+          <span>
+            Self-evaluation already submitted for this Project and Quarter/Year.
+          </span>
+        ));
+        return;
+      }
       const evaluationData = {
         ratings,
         feedback,
@@ -131,19 +163,12 @@ const SelfEvaluationForm = () => {
       queryClient.invalidateQueries(['evaluations']);
     } catch (error) {
       console.error('Error submitting evaluation:', error);
-      const msg = (error?.response?.data?.message || error?.message || 'Failed to submit evaluation');
-      const lower = String(msg).toLowerCase();
-      if (lower.includes('already submitted') || lower.includes('already') && lower.includes('quarter')) {
-        // Treat as non-fatal: user has already submitted for this project+quarter+year
-        toast((t) => (
-          <span>
-            You have already submitted for this Project and Quarter/Year.<br />
-            We’ve kept your existing submission.
-          </span>
-        ));
+      if (error?.response?.status === 409) {
+        toast('Self-evaluation already submitted for this Project and Quarter/Year.');
         setSubmitted(true);
         return;
       }
+      const msg = (error?.response?.data?.message || error?.message || 'Failed to submit evaluation');
       toast.error(msg);
     }
   };
@@ -264,6 +289,11 @@ const SelfEvaluationForm = () => {
               </select>
             </div>
           </div>
+          {dupCheck.exists && (
+            <div className="mt-4 p-3 rounded-lg border border-yellow-200 bg-yellow-50 text-yellow-800 text-sm">
+              Self-evaluation already submitted for the selected Project and Quarter/Year.
+            </div>
+          )}
         </div>
         {/* Competencies Grid */}
         <div className="grid gap-8 mb-12">
@@ -378,7 +408,7 @@ const SelfEvaluationForm = () => {
           </button>
           <button
             type="submit"
-            disabled={competencies.some(c => !ratings[c.name])}
+            disabled={competencies.some(c => !ratings[c.name]) || dupCheck.exists}
             className="px-8 py-3 bg-secondary text-white rounded-xl font-medium hover:bg-secondary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

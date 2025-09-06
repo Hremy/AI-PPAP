@@ -50,6 +50,15 @@ api.interceptors.response.use(
       localStorage.removeItem('ai_ppap_auth_token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+      return Promise.reject(error);
+    }
+    // Force password change redirect for managers
+    if (error.response?.status === 403 && error.response?.data?.error === 'FORCE_PASSWORD_CHANGE') {
+      try { sessionStorage.setItem('force_password_change', '1'); } catch (_) {}
+      if (window.location.pathname !== '/manager/set-password') {
+        window.location.href = '/manager/set-password';
+      }
+      return Promise.reject(error);
     }
     return Promise.reject(error);
   }
@@ -153,6 +162,12 @@ export const submitEvaluation = async (evaluationData) => {
   return response.data;
 };
 
+// Check duplicate self-evaluation for project/year/quarter
+export const checkSelfEvaluationExists = async ({ projectId, evaluationYear, evaluationQuarter }) => {
+  const res = await api.get('/v1/evaluations/self/check', { params: { projectId, evaluationYear, evaluationQuarter } });
+  return res.data;
+};
+
 // Get user's self-evaluations
 export const getUserEvaluations = async (userId) => {
   const response = await api.get(`/v1/evaluations/user/${userId}`);
@@ -186,11 +201,16 @@ export const getAdmins = async () => {
   return res.data;
 };
 
-export const createManager = async ({ username, email, password, firstName, lastName, department }) => {
-  // Backend expects request params, not JSON body
-  const res = await api.post('/v1/users/managers', null, {
-    params: { username, email, password, firstName, lastName, department },
-  });
+export const createManager = async ({ firstName, lastName, email }) => {
+  // Use AdminController which generates password and returns it
+  const res = await api.post('/v1/admin/managers', { firstName, lastName, email });
+  return res.data;
+};
+
+// Admin: delete manager
+export const deleteManager = async (managerId) => {
+  // Use the users controller endpoint which is present: DELETE /v1/users/managers/{userId}
+  const res = await api.delete(`/v1/users/managers/${managerId}`);
   return res.data;
 };
 
@@ -249,12 +269,6 @@ export const getManagerAnalytics = async () => {
 // Evaluations (admin/all)
 export const getEvaluations = async () => {
   const res = await api.get('/v1/evaluations');
-  return res.data;
-};
-
-// Manager dashboard
-export const getManagerDashboard = async () => {
-  const res = await api.get('/v1/manager/dashboard');
   return res.data;
 };
 

@@ -112,15 +112,15 @@ public class PeerReviewService {
                 .filter(pr -> pr.getSuggestions() != null && !pr.getSuggestions().trim().isEmpty())
                 .forEach(pr -> allFeedback.append("- ").append(pr.getSuggestions()).append("\n"));
         
-        // Use AI to summarize the feedback
+        // Try to use AI summarization, fall back to basic summary if it fails
         try {
-            String prompt = "Please analyze the following peer review feedback and provide a concise summary highlighting the key strengths, areas for improvement, and actionable recommendations:\n\n" + allFeedback.toString();
             SummarizeRequest request = new SummarizeRequest();
-            request.setText(prompt);
+            request.setText(allFeedback.toString());
+            request.setMaxTokens(300);
             SummarizeResponse response = aiService.summarize(request);
             return response.getSummary();
         } catch (Exception e) {
-            // Fallback to basic summary if AI fails
+            System.err.println("AI summarization failed, using basic summary: " + e.getMessage());
             return generateBasicSummary(peerReviews);
         }
     }
