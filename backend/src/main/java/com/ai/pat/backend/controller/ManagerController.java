@@ -3,7 +3,6 @@ package com.ai.pat.backend.controller;
 import com.ai.pat.backend.dto.EvaluationDTO;
 import com.ai.pat.backend.model.Project;
 import com.ai.pat.backend.model.User;
-import com.ai.pat.backend.repository.ProjectRepository;
 import com.ai.pat.backend.repository.UserRepository;
 import com.ai.pat.backend.service.EvaluationService;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -28,7 +26,6 @@ public class ManagerController {
 
     private final EvaluationService evaluationService;
     private final UserRepository userRepository;
-    private final ProjectRepository projectRepository;
 
     /**
      * Returns aggregated dashboard stats for the current manager.
@@ -157,19 +154,41 @@ public class ManagerController {
     public ResponseEntity<Map<String, Object>> getAnalytics() {
         Map<String, Object> payload = new HashMap<>();
         try {
-            Long managerId = resolveCurrentUserId();
-            // Get only non-deleted evaluations visible to this manager
-            List<EvaluationDTO> evaluations = evaluationService.getManagerVisibleEvaluations(managerId)
+            // Get all evaluations for analytics calculation
+            List<EvaluationDTO> evaluations = evaluationService.getAllEvaluations()
                     .stream()
                     .filter(e -> e.getStatus() != null && !e.getStatus().toString().equals("DELETED"))
                     .collect(Collectors.toList());
 
-            // Average Team Rating - calculate from manager ratings
-            double avgRating = evaluations.stream()
-                    .filter(e -> e.getManagerRating() != null && e.getManagerRating() > 0)
-                    .mapToDouble(EvaluationDTO::getManagerRating)
+            // Average Team Rating - calculate from both employee and manager ratings
+            double avgEmployeeRating = evaluations.stream()
+                    .filter(e -> e.getOverallRating() != null && e.getOverallRating() > 0)
+                    .mapToDouble(EvaluationDTO::getOverallRating)
                     .average()
                     .orElse(0.0);
+            
+            // Calculate manager rating from competency ratings for accuracy
+            double avgManagerRating = evaluations.stream()
+                    .filter(e -> e.getManagerCompetencyRatings() != null && !e.getManagerCompetencyRatings().isEmpty())
+                    .mapToDouble(e -> {
+                        Map<String, Integer> ratings = e.getManagerCompetencyRatings();
+                        return ratings.values().stream()
+                                .mapToInt(Integer::intValue)
+                                .average()
+                                .orElse(0.0);
+                    })
+                    .average()
+                    .orElse(0.0);
+            
+            // Combined average of both ratings
+            double avgRating = 0.0;
+            if (avgEmployeeRating > 0 && avgManagerRating > 0) {
+                avgRating = (avgEmployeeRating + avgManagerRating) / 2.0;
+            } else if (avgEmployeeRating > 0) {
+                avgRating = avgEmployeeRating;
+            } else if (avgManagerRating > 0) {
+                avgRating = avgManagerRating;
+            }
 
             // Active Team Members - distinct employees with non-deleted evaluations
             long activeMembers = evaluations.stream()
@@ -178,21 +197,50 @@ public class ManagerController {
                     .distinct()
                     .count();
 
-            // Top Performers - count evaluations with manager rating >= 4.5
+            // Top Performers - count employees with combined rating >= 4.5
             long topPerformers = evaluations.stream()
-                    .filter(e -> e.getManagerRating() != null && e.getManagerRating() >= 4.5)
+                    .filter(e -> {
+                        double employeeRating = e.getOverallRating() != null ? e.getOverallRating() : 0.0;
+                        double managerRating = e.getManagerRating() != null ? e.getManagerRating() : 0.0;
+                        double combinedRating = 0.0;
+                        
+                        if (employeeRating > 0 && managerRating > 0) {
+                            combinedRating = (employeeRating + managerRating) / 2.0;
+                        } else if (employeeRating > 0) {
+                            combinedRating = employeeRating;
+                        } else if (managerRating > 0) {
+                            combinedRating = managerRating;
+                        }
+                        
+                        return combinedRating >= 4.5;
+                    })
                     .map(EvaluationDTO::getEmployeeName)
                     .filter(name -> name != null && !name.isBlank())
                     .distinct()
                     .count();
 
-            // On-track Goals - placeholder calculation (could be based on goal completion rates)
+            // On-track Goals - based on combined ratings >= 3.0
             double onTrackPercentage = evaluations.isEmpty() ? 0.0 : 
                     (double) evaluations.stream()
-                            .filter(e -> e.getManagerRating() != null && e.getManagerRating() >= 3.0)
+                            .filter(e -> {
+                                double employeeRating = e.getOverallRating() != null ? e.getOverallRating() : 0.0;
+                                double managerRating = e.getManagerRating() != null ? e.getManagerRating() : 0.0;
+                                double combinedRating = 0.0;
+                                
+                                if (employeeRating > 0 && managerRating > 0) {
+                                    combinedRating = (employeeRating + managerRating) / 2.0;
+                                } else if (employeeRating > 0) {
+                                    combinedRating = employeeRating;
+                                } else if (managerRating > 0) {
+                                    combinedRating = managerRating;
+                                }
+                                
+                                return combinedRating >= 3.0;
+                            })
                             .mapToInt(e -> 1)
-                            .sum() / evaluations.size() * 100;
+                            .sum() / (double) evaluations.size() * 100;
 
+            
             payload.put("averageTeamRating", Math.round(avgRating * 10.0) / 10.0);
             payload.put("activeTeamMembers", activeMembers);
             payload.put("topPerformers", topPerformers);

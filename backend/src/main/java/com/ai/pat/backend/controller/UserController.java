@@ -263,7 +263,10 @@ public class UserController {
     public record UpdateProfileRequest(
         @NotBlank String firstName,
         @NotBlank String lastName,
-        @Email String email
+        @Email String email,
+        String phone,
+        String department,
+        String position
     ) {}
 
     public record ChangePasswordRequest(
@@ -272,21 +275,60 @@ public class UserController {
     ) {}
 
     @PutMapping("/profile")
-    public ResponseEntity<Map<String, Object>> updateProfile(@Valid @RequestBody UpdateProfileRequest request) {
+    public ResponseEntity<Map<String, Object>> updateProfile(
+            @Valid @RequestBody UpdateProfileRequest request,
+            @RequestHeader(value = "X-User", required = false) String xUser) {
         try {
-            // In a real application, you would get the user ID from the JWT token
-            // For now, we'll use a mock approach
+            // Get current user identifier
+            String userKey = xUser;
+            if (userKey == null || userKey.isBlank()) {
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated()) {
+                    userKey = auth.getName();
+                }
+            }
             
-            // Mock user update - replace with actual service call
+            if (userKey == null || userKey.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "User not authenticated"
+                ));
+            }
+            
+            // Find and update user
+            User user = userService.findByUsernameOrEmail(userKey);
+            if (user == null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "User not found"
+                ));
+            }
+            
+            // Update user profile
+            user.setFirstName(request.firstName());
+            user.setLastName(request.lastName());
+            user.setEmail(request.email());
+            if (request.phone() != null) {
+                user.setPhone(request.phone());
+            }
+            if (request.department() != null) {
+                user.setDepartment(request.department());
+            }
+            if (request.position() != null) {
+                user.setPosition(request.position());
+            }
+            
+            User updatedUser = userService.saveUser(user);
+            
             Map<String, Object> response = Map.of(
                 "success", true,
                 "message", "Profile updated successfully",
-                "user", Map.of(
-                    "firstName", request.firstName(),
-                    "lastName", request.lastName(),
-                    "email", request.email(),
-                    "role", "ROLE_EMPLOYEE" // This would come from the actual user
-                )
+                "firstName", updatedUser.getFirstName() != null ? updatedUser.getFirstName() : "",
+                "lastName", updatedUser.getLastName() != null ? updatedUser.getLastName() : "",
+                "email", updatedUser.getEmail() != null ? updatedUser.getEmail() : "",
+                "phone", updatedUser.getPhone() != null ? updatedUser.getPhone() : "",
+                "department", updatedUser.getDepartment() != null ? updatedUser.getDepartment() : "",
+                "position", updatedUser.getPosition() != null ? updatedUser.getPosition() : ""
             );
             
             return ResponseEntity.ok(response);
@@ -337,22 +379,45 @@ public class UserController {
     }
 
     @GetMapping("/profile")
-    public ResponseEntity<Map<String, Object>> getProfile() {
+    public ResponseEntity<Map<String, Object>> getProfile(
+            @RequestHeader(value = "X-User", required = false) String xUser) {
         try {
-            // In a real application, you would get the user from the JWT token
-            // For now, we'll return mock data
+            // Get current user identifier
+            String userKey = xUser;
+            if (userKey == null || userKey.isBlank()) {
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated()) {
+                    userKey = auth.getName();
+                }
+            }
             
-            Map<String, Object> user = Map.of(
-                "firstName", "John",
-                "lastName", "Doe",
-                "email", "john.doe@example.com",
-                "role", "ROLE_EMPLOYEE"
+            if (userKey == null || userKey.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "User not authenticated"
+                ));
+            }
+            
+            // Find user
+            User user = userService.findByUsernameOrEmail(userKey);
+            if (user == null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "User not found"
+                ));
+            }
+            
+            Map<String, Object> userProfile = Map.of(
+                "firstName", user.getFirstName() != null ? user.getFirstName() : "",
+                "lastName", user.getLastName() != null ? user.getLastName() : "",
+                "email", user.getEmail() != null ? user.getEmail() : "",
+                "phone", user.getPhone() != null ? user.getPhone() : "",
+                "department", user.getDepartment() != null ? user.getDepartment() : "",
+                "position", user.getPosition() != null ? user.getPosition() : "",
+                "roles", user.getRoles() != null ? user.getRoles() : new HashSet<>()
             );
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "user", user
-            ));
+            return ResponseEntity.ok(userProfile);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,

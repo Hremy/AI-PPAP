@@ -81,8 +81,8 @@ const ManagerAnalytics = () => {
         <StatCard 
           icon={ChartBarIcon} 
           title="Average Team Rating" 
-          value={analytics.averageTeamRating > 0 ? `${analytics.averageTeamRating} / 5` : "No data"} 
-          subtitle="Based on manager ratings" 
+          value={analytics.averageTeamRating > 0 ? `${analytics.averageTeamRating.toFixed(1)} / 5` : "No data"} 
+          subtitle="Combined employee & manager ratings" 
         />
         <StatCard 
           icon={UserGroupIcon} 
@@ -94,13 +94,13 @@ const ManagerAnalytics = () => {
           icon={ArrowTrendingUpIcon} 
           title="On-track Goals" 
           value={analytics.onTrackGoals > 0 ? `${analytics.onTrackGoals}%` : "0%"} 
-          subtitle="Rating ≥ 3.0" 
+          subtitle="Combined rating ≥ 3.0" 
         />
         <StatCard 
           icon={TrophyIcon} 
           title="Top Performers" 
           value={String(analytics.topPerformers)} 
-          subtitle="Rated 4.5+" 
+          subtitle="Combined rating 4.5+" 
         />
       </div>
 

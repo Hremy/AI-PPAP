@@ -40,6 +40,11 @@ import DashboardRouter from './components/dashboard/DashboardRouter';
 import ErrorBoundary from './components/ErrorBoundary';
 import RoleBasedRouteGuard from './components/auth/RoleBasedRouteGuard';
 
+// Performance and AI Pages
+import PerformanceHistory from './pages/performance/PerformanceHistory';
+import PerformanceGoals from './pages/performance/PerformanceGoals';
+import AIInsights from './pages/ai/AIInsights';
+
 
 import './index.css';
 
@@ -226,11 +231,32 @@ function App() {
                               }
                             />
             
-            {/* Placeholder routes for future pages */}
+            {/* Performance and AI routes */}
             <Route path="/reviews/self" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Self Review</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
-            <Route path="/performance/history" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Performance History</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
-            <Route path="/performance/goals" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Goals</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
-            <Route path="/ai/insights" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">AI Insights</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
+            <Route 
+              path="/performance/history" 
+              element={
+                <ProtectedRoute>
+                  <PerformanceHistory />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/performance/goals" 
+              element={
+                <ProtectedRoute>
+                  <PerformanceGoals />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/ai/insights" 
+              element={
+                <ProtectedRoute>
+                  <AIInsights />
+                </ProtectedRoute>
+              } 
+            />
             <Route path="/settings/profile" element={<ProtectedRoute><div className="min-h-screen bg-background flex items-center justify-center"><div className="text-center"><h1 className="text-2xl font-bold text-secondary mb-4">Profile Settings</h1><p className="text-secondary/70">Coming Soon...</p></div></div></ProtectedRoute>} />
             
             {/* Default redirect */}

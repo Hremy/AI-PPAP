@@ -257,4 +257,16 @@ public class UserService {
         if (str == null || str.isEmpty()) return str;
         return str.substring(0, 1).toUpperCase() + str.substring(1).toLowerCase();
     }
+    
+    @Transactional(readOnly = true)
+    public User findByUsernameOrEmail(String usernameOrEmail) {
+        return userRepository.findByUsername(usernameOrEmail)
+                .or(() -> userRepository.findByEmail(usernameOrEmail))
+                .orElse(null);
+    }
+    
+    @Transactional
+    public User saveUser(User user) {
+        return userRepository.save(user);
+    }
 }
