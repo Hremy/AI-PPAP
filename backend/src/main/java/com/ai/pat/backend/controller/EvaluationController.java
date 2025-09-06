@@ -149,6 +149,54 @@ public class EvaluationController {
             ));
         }
     }
+
+    // Admin utility: rebind evaluations from one email to another (fix AnonymousUser rows)
+    @PostMapping("/admin/rebind-user")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> rebindEvaluations(
+            @RequestParam("fromEmail") String fromEmail,
+            @RequestParam("toEmail") String toEmail) {
+        if (fromEmail == null || fromEmail.isBlank() || toEmail == null || toEmail.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "fromEmail and toEmail are required"
+            ));
+        }
+        try {
+            Long toUserId = userService.resolveOrCreateUserId(toEmail);
+            var toUser = userRepository.findById(toUserId).orElse(null);
+            if (toUser == null) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "success", false,
+                        "message", "Target user not found"
+                ));
+            }
+            var evals = evaluationRepository.findByEmployeeEmail(fromEmail);
+            int updated = 0;
+            for (var e : evals) {
+                try {
+                    e.setEmployee(toUser);
+                    // Update denormalized fields for display
+                    String fn = toUser.getFirstName() != null ? toUser.getFirstName() : "";
+                    String ln = toUser.getLastName() != null ? toUser.getLastName() : "";
+                    String full = (fn + " " + ln).trim();
+                    if (!full.isBlank()) e.setEmployeeName(full);
+                    if (toUser.getEmail() != null) e.setEmployeeEmail(toUser.getEmail());
+                    evaluationRepository.save(e);
+                    updated++;
+                } catch (Exception ignore) {}
+            }
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "updated", updated
+            ));
+        } catch (Exception ex) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "success", false,
+                    "message", ex.getMessage()
+            ));
+        }
+    }
     
     @PostMapping("/self")
     public ResponseEntity<EvaluationDTO> submitSelfEvaluation(
@@ -224,6 +272,13 @@ public class EvaluationController {
             if (createKey == null) {
                 org.springframework.security.core.Authentication a = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
                 if (a != null && a.isAuthenticated() && a.getName() != null && !a.getName().isBlank()) createKey = a.getName();
+            }
+            // Reject anonymousUser principals instead of creating minimal users
+            if (createKey != null) {
+                String lk = createKey.toLowerCase();
+                if ("anonymoususer".equals(lk) || lk.contains("anonymoususer@")) {
+                    return ResponseEntity.status(401).build();
+                }
             }
             if (createKey != null && !createKey.isBlank()) {
                 employeeId = userService.resolveOrCreateUserId(createKey);

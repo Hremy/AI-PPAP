@@ -240,6 +240,12 @@ export const getManagerDashboard = async () => {
   return res.data;
 };
 
+// Manager analytics
+export const getManagerAnalytics = async () => {
+  const res = await api.get('/v1/manager/analytics');
+  return res.data;
+};
+
 // Evaluations (admin/all)
 export const getEvaluations = async () => {
   const res = await api.get('/v1/evaluations');

@@ -6,5 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface KeqRepository extends JpaRepository<Keq, Long> {
-    boolean existsByTextIgnoreCase(String text);
+    boolean existsByCategoryIgnoreCase(String category);
 }

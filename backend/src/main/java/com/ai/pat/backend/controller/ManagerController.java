@@ -40,12 +40,18 @@ public class ManagerController {
         try {
             Long reviewerId = resolveCurrentUserId();
             List<EvaluationDTO> assigned = evaluationService.getManagerVisibleEvaluations(reviewerId);
+            
+            // Debug: log the assigned evaluations
+            System.out.println("DEBUG: Manager " + reviewerId + " has " + assigned.size() + " assigned evaluations");
+            assigned.forEach(e -> System.out.println("  - Evaluation " + e.getId() + " for " + e.getEmployeeName() + " status: " + e.getStatus()));
 
             long pending = assigned.stream()
                     .filter(e -> e.getStatus() != null && e.getStatus().toString().equals("PENDING"))
                     .count();
             long completed = assigned.stream()
-                    .filter(e -> e.getStatus() != null && e.getStatus().toString().equals("COMPLETED"))
+                    .filter(e -> e.getStatus() != null && 
+                            (e.getStatus().toString().equals("COMPLETED") || 
+                             e.getStatus().toString().equals("REVIEWED")))
                     .count();
             // Overdue: placeholder (no due date model). Use PENDING as proxy in demo
             long overdue = pending > 0 ? Math.max(0, pending - 1) : 0;
@@ -145,6 +151,63 @@ public class ManagerController {
                 })
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.ok(List.of()));
+    }
+
+    @GetMapping("/analytics")
+    public ResponseEntity<Map<String, Object>> getAnalytics() {
+        Map<String, Object> payload = new HashMap<>();
+        try {
+            Long managerId = resolveCurrentUserId();
+            // Get only non-deleted evaluations visible to this manager
+            List<EvaluationDTO> evaluations = evaluationService.getManagerVisibleEvaluations(managerId)
+                    .stream()
+                    .filter(e -> e.getStatus() != null && !e.getStatus().toString().equals("DELETED"))
+                    .collect(Collectors.toList());
+
+            // Average Team Rating - calculate from manager ratings
+            double avgRating = evaluations.stream()
+                    .filter(e -> e.getManagerRating() != null && e.getManagerRating() > 0)
+                    .mapToDouble(EvaluationDTO::getManagerRating)
+                    .average()
+                    .orElse(0.0);
+
+            // Active Team Members - distinct employees with non-deleted evaluations
+            long activeMembers = evaluations.stream()
+                    .map(EvaluationDTO::getEmployeeName)
+                    .filter(name -> name != null && !name.isBlank())
+                    .distinct()
+                    .count();
+
+            // Top Performers - count evaluations with manager rating >= 4.5
+            long topPerformers = evaluations.stream()
+                    .filter(e -> e.getManagerRating() != null && e.getManagerRating() >= 4.5)
+                    .map(EvaluationDTO::getEmployeeName)
+                    .filter(name -> name != null && !name.isBlank())
+                    .distinct()
+                    .count();
+
+            // On-track Goals - placeholder calculation (could be based on goal completion rates)
+            double onTrackPercentage = evaluations.isEmpty() ? 0.0 : 
+                    (double) evaluations.stream()
+                            .filter(e -> e.getManagerRating() != null && e.getManagerRating() >= 3.0)
+                            .mapToInt(e -> 1)
+                            .sum() / evaluations.size() * 100;
+
+            payload.put("averageTeamRating", Math.round(avgRating * 10.0) / 10.0);
+            payload.put("activeTeamMembers", activeMembers);
+            payload.put("topPerformers", topPerformers);
+            payload.put("onTrackGoals", Math.round(onTrackPercentage));
+            payload.put("totalEvaluations", evaluations.size());
+
+        } catch (Exception ex) {
+            // Fallback to zeros if there's an error
+            payload.put("averageTeamRating", 0.0);
+            payload.put("activeTeamMembers", 0);
+            payload.put("topPerformers", 0);
+            payload.put("onTrackGoals", 0);
+            payload.put("totalEvaluations", 0);
+        }
+        return ResponseEntity.ok(payload);
     }
 
     private Long resolveCurrentUserId() {
