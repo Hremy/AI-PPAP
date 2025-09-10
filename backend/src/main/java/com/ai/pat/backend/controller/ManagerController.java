@@ -53,12 +53,20 @@ public class ManagerController {
             // Overdue: placeholder (no due date model). Use PENDING as proxy in demo
             long overdue = pending > 0 ? Math.max(0, pending - 1) : 0;
 
-            // Team members: placeholder (no team model). Use distinct employeeName in assigned list
-            long teamMembers = assigned.stream()
-                    .map(EvaluationDTO::getEmployeeName)
-                    .filter(n -> n != null && !n.isBlank())
-                    .distinct()
-                    .count();
+            // Team members: count employees assigned to projects managed by this manager
+            long teamMembers = 0;
+            try {
+                java.util.Optional<User> opt = userRepository.findById(reviewerId);
+                if (opt.isPresent() && opt.get().getManagedProjects() != null && !opt.get().getManagedProjects().isEmpty()) {
+                    java.util.Set<Project> managed = opt.get().getManagedProjects();
+                    java.util.List<User> employees = userRepository.findByProjectsAndRole(managed.stream().toList(), "EMPLOYEE");
+                    teamMembers = employees == null ? 0 : employees.stream()
+                            .filter(u -> u != null && u.getId() != null)
+                            .map(User::getId)
+                            .distinct()
+                            .count();
+                }
+            } catch (Exception ignore) {}
 
             payload.put("pendingReviews", pending);
             payload.put("completedReviews", completed);
@@ -154,8 +162,9 @@ public class ManagerController {
     public ResponseEntity<Map<String, Object>> getAnalytics() {
         Map<String, Object> payload = new HashMap<>();
         try {
-            // Get all evaluations for analytics calculation
-            List<EvaluationDTO> evaluations = evaluationService.getAllEvaluations()
+            // Only include evaluations that belong to projects managed by the current manager
+            Long managerId = resolveCurrentUserId();
+            List<EvaluationDTO> evaluations = evaluationService.getManagerVisibleEvaluations(managerId)
                     .stream()
                     .filter(e -> e.getStatus() != null && !e.getStatus().toString().equals("DELETED"))
                     .collect(Collectors.toList());
@@ -241,11 +250,78 @@ public class ManagerController {
                             .sum() / (double) evaluations.size() * 100;
 
             
+            // Ratings distribution (1..5 buckets) based on combined ratings
+            long[] buckets = new long[5];
+            for (EvaluationDTO e : evaluations) {
+                double employeeRating = e.getOverallRating() != null ? e.getOverallRating() : 0.0;
+                double managerRating = 0.0;
+                if (e.getManagerCompetencyRatings() != null && !e.getManagerCompetencyRatings().isEmpty()) {
+                    managerRating = e.getManagerCompetencyRatings().values().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+                } else if (e.getManagerRating() != null) {
+                    managerRating = e.getManagerRating();
+                }
+                double combined = (employeeRating > 0 && managerRating > 0)
+                        ? (employeeRating + managerRating) / 2.0
+                        : (employeeRating > 0 ? employeeRating : managerRating);
+                int idx = (int)Math.round(Math.max(1, Math.min(5, combined)));
+                // Map 1..5 -> 0..4
+                buckets[idx-1]++;
+            }
+            java.util.List<java.util.Map<String, Object>> ratingsDist = new java.util.ArrayList<>();
+            for (int i = 0; i < 5; i++) {
+                ratingsDist.add(java.util.Map.of("label", (i+1) + "★", "count", buckets[i]));
+            }
+
+            // Competency averages heatmap: average per competency across visible evaluations (use managerCompetencyRatings if present, else employee competencyRatings)
+            java.util.Map<String, java.util.List<Integer>> compMap = new java.util.HashMap<>();
+            for (EvaluationDTO e : evaluations) {
+                java.util.Map<String, Integer> source = (e.getManagerCompetencyRatings() != null && !e.getManagerCompetencyRatings().isEmpty())
+                        ? e.getManagerCompetencyRatings()
+                        : (e.getCompetencyRatings() != null ? e.getCompetencyRatings() : java.util.Collections.emptyMap());
+                for (java.util.Map.Entry<String, Integer> entry : source.entrySet()) {
+                    if (entry.getKey() == null || entry.getValue() == null) continue;
+                    compMap.computeIfAbsent(entry.getKey(), k -> new java.util.ArrayList<>()).add(entry.getValue());
+                }
+            }
+            java.util.List<java.util.Map<String, Object>> competencyAverages = new java.util.ArrayList<>();
+            for (var e : compMap.entrySet()) {
+                double avg = e.getValue().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+                competencyAverages.add(java.util.Map.of("competency", e.getKey(), "average", Math.round(avg * 10.0) / 10.0));
+            }
+            competencyAverages.sort(java.util.Comparator.comparing(m -> ((String)m.get("competency")).toLowerCase()));
+
+            // Recent activity: latest up to 10 evaluations by updated/reviewed/submitted
+            java.util.List<java.util.Map<String, Object>> recentActivity = new java.util.ArrayList<>();
+            evaluations.stream()
+                    .sorted((a,b) -> {
+                        java.time.LocalDateTime ta = a.getUpdatedAt() != null ? a.getUpdatedAt() : (a.getReviewedAt() != null ? a.getReviewedAt() : a.getSubmittedAt());
+                        java.time.LocalDateTime tb = b.getUpdatedAt() != null ? b.getUpdatedAt() : (b.getReviewedAt() != null ? b.getReviewedAt() : b.getSubmittedAt());
+                        if (ta == null && tb == null) return 0;
+                        if (ta == null) return 1;
+                        if (tb == null) return -1;
+                        return tb.compareTo(ta);
+                    })
+                    .limit(10)
+                    .forEach(ev -> {
+                        java.util.HashMap<String, Object> m = new java.util.HashMap<>();
+                        m.put("id", ev.getId());
+                        m.put("employeeName", ev.getEmployeeName());
+                        m.put("projectName", ev.getProjectName());
+                        m.put("status", ev.getStatus() != null ? ev.getStatus().toString() : "");
+                        m.put("updatedAt", ev.getUpdatedAt());
+                        m.put("reviewedAt", ev.getReviewedAt());
+                        m.put("submittedAt", ev.getSubmittedAt());
+                        recentActivity.add(m);
+                    });
+
             payload.put("averageTeamRating", Math.round(avgRating * 10.0) / 10.0);
             payload.put("activeTeamMembers", activeMembers);
             payload.put("topPerformers", topPerformers);
             payload.put("onTrackGoals", Math.round(onTrackPercentage));
             payload.put("totalEvaluations", evaluations.size());
+            payload.put("ratingsDistribution", ratingsDist);
+            payload.put("competencyAverages", competencyAverages);
+            payload.put("recentActivity", recentActivity);
 
         } catch (Exception ex) {
             // Fallback to zeros if there's an error

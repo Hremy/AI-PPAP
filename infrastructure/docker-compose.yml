@@ -5,14 +5,15 @@ services:
     container_name: ai_ppap_db
     environment:
       POSTGRES_DB: ai_ppap
-      POSTGRES_USER: ai_ppap
-      POSTGRES_PASSWORD: ai_ppap
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ai_ppap -d ai_ppap"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_ppap"]
       interval: 5s
       timeout: 5s
       retries: 10

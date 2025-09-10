@@ -48,14 +48,25 @@ export default function LoginForm() {
         return; // Do not persist token/user or navigate
       }
 
+      // If server returned roles array, use it to detect forced password change
+      const serverRoles = Array.isArray(data.roles) ? data.roles : [];
+
       // Use AuthContext login method
       login(data.token);
+
+      // If manager is flagged to force password change, redirect to profile password tab
+      const forcePassword = serverRoles.includes('FORCE_PASSWORD_CHANGE');
 
       // Route based on role - employees go to dashboard, managers to manager dashboard, admins to admin dashboard
       if (normalizedRole === 'ROLE_EMPLOYEE') {
         navigate('/dashboard');
       } else if (normalizedRole === 'ROLE_MANAGER') {
-        navigate('/manager/dashboard');
+        if (forcePassword) {
+          try { sessionStorage.setItem('force_password_change', '1'); } catch (_) {}
+          navigate('/manager/set-password', { state: { forcePasswordChange: true, message: 'Please set a new password before continuing.' } });
+        } else {
+          navigate('/manager/dashboard');
+        }
       } else if (normalizedRole === 'ROLE_ADMIN') {
         navigate('/admin/dashboard');
       } else {

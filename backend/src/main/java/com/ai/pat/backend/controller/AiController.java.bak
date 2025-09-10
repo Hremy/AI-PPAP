@@ -11,48 +11,40 @@ import com.ai.pat.backend.controller.dto.ai.RecommendationsResponse;
 import com.ai.pat.backend.controller.dto.ai.EvaluateRequest;
 import com.ai.pat.backend.service.AiService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/v1/ai")
+@RequiredArgsConstructor
 public class AiController {
 
     private final AiService aiService;
 
-    public AiController(AiService aiService) {
-        this.aiService = aiService;
-    }
-
     @PostMapping("/draft-evaluation")
-    @PreAuthorize("hasRole('EMPLOYEE') or hasRole('MANAGER')")
     public ResponseEntity<DraftEvaluationResponse> draft(@Valid @RequestBody DraftEvaluationRequest req) {
         return ResponseEntity.ok(aiService.draftEvaluation(req));
     }
 
     @PostMapping("/analyze-text")
-    @PreAuthorize("hasRole('EMPLOYEE') or hasRole('MANAGER')")
     public ResponseEntity<AnalyzeTextResponse> analyzeText(@Valid @RequestBody AnalyzeTextRequest req) {
         return ResponseEntity.ok(aiService.analyzeText(req));
     }
 
     @PostMapping("/summarize")
-    @PreAuthorize("hasRole('EMPLOYEE') or hasRole('MANAGER')")
     public ResponseEntity<SummarizeResponse> summarize(@Valid @RequestBody SummarizeRequest req) {
         return ResponseEntity.ok(aiService.summarize(req));
     }
 
     @PostMapping("/recommendations")
-    @PreAuthorize("hasRole('EMPLOYEE') or hasRole('MANAGER')")
     public ResponseEntity<RecommendationsResponse> recommendations(@Valid @RequestBody RecommendationsRequest req) {
         return ResponseEntity.ok(aiService.recommendations(req));
     }
 
     @PostMapping("/evaluate")
-    @PreAuthorize("hasRole('EMPLOYEE') or hasRole('MANAGER')")
     public ResponseEntity<Map<String, Object>> evaluate(@Valid @RequestBody EvaluateRequest req) {
         return ResponseEntity.ok(aiService.evaluate(req));
     }

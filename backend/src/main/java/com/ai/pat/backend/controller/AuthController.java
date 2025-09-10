@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/v1/auth")
@@ -27,21 +28,95 @@ public class AuthController {
 
     @PostMapping("/authenticate")
     public ResponseEntity<Map<String, Object>> authenticate(@RequestBody AuthRequest request) {
-        // DEV: Simulate server-side role belonging. We DO NOT trust loginAs.
-        // In real backend, role comes from DB for the user.
-        String role = deriveRoleFromEmail(request.email());
-        
+        // Prefer persisted roles from DB so admin-created MANAGERs always authenticate as managers
+        Optional<User> userOpt = userRepository.findByEmail(request.email());
+        Set<String> rolesSet;
+        if (userOpt.isPresent() && userOpt.get().getRoles() != null && !userOpt.get().getRoles().isEmpty()) {
+            rolesSet = userOpt.get().getRoles();
+        } else {
+            // Fallback for demo users not in DB
+            rolesSet = Set.of(deriveRoleFromEmail(request.email()));
+        }
+
+        // Primary role for convenience (prefer MANAGER, then ADMIN, else EMPLOYEE)
+        String role = rolesSet.contains("ROLE_MANAGER") ? "ROLE_MANAGER"
+                : rolesSet.contains("ROLE_ADMIN") ? "ROLE_ADMIN" : "ROLE_EMPLOYEE";
+
         // Create a mock JWT token with user info
         String mockJwtToken = createMockJwtToken(request.email(), role);
-        
+
         return ResponseEntity.ok(Map.of(
                 "token", mockJwtToken,
                 "email", request.email(),
                 "role", role,
-                "roles", List.of(role),
+                "roles", List.copyOf(rolesSet),
                 "username", extractUsernameFromEmail(request.email()),
-                "firstName", "John",
-                "lastName", "Doe"
+                "firstName", userOpt.map(User::getFirstName).orElse("John"),
+                "lastName", userOpt.map(User::getLastName).orElse("Doe")
+        ));
+    }
+
+    @PostMapping("/manager-authenticate")
+    public ResponseEntity<Map<String, Object>> managerAuthenticate(@RequestBody AuthRequest request) {
+        Optional<User> userOpt = userRepository.findByEmail(request.email());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(403).body(Map.of(
+                "success", false,
+                "message", "User not found or not authorized as MANAGER"
+            ));
+        }
+        User u = userOpt.get();
+        Set<String> roles = u.getRoles() != null ? u.getRoles() : Set.of();
+        boolean isManager = roles.contains("ROLE_MANAGER") || roles.contains("MANAGER");
+        if (!isManager) {
+            return ResponseEntity.status(403).body(Map.of(
+                "success", false,
+                "message", "Not authorized as MANAGER"
+            ));
+        }
+
+        String role = roles.contains("ROLE_MANAGER") ? "ROLE_MANAGER" : "MANAGER";
+        String token = createMockJwtToken(u.getEmail(), role);
+        return ResponseEntity.ok(Map.of(
+            "token", token,
+            "email", u.getEmail(),
+            "role", role,
+            "roles", List.of(role),
+            "username", u.getUsername(),
+            "firstName", u.getFirstName() == null ? "" : u.getFirstName(),
+            "lastName", u.getLastName() == null ? "" : u.getLastName()
+        ));
+    }
+
+    @PostMapping("/employee-authenticate")
+    public ResponseEntity<Map<String, Object>> employeeAuthenticate(@RequestBody AuthRequest request) {
+        Optional<User> userOpt = userRepository.findByEmail(request.email());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(403).body(Map.of(
+                "success", false,
+                "message", "User not found or not authorized as EMPLOYEE"
+            ));
+        }
+        User u = userOpt.get();
+        Set<String> roles = u.getRoles() != null ? u.getRoles() : Set.of();
+        boolean isEmployee = roles.contains("ROLE_EMPLOYEE") || roles.contains("EMPLOYEE");
+        if (!isEmployee) {
+            return ResponseEntity.status(403).body(Map.of(
+                "success", false,
+                "message", "Not authorized as EMPLOYEE"
+            ));
+        }
+
+        String role = roles.contains("ROLE_EMPLOYEE") ? "ROLE_EMPLOYEE" : "EMPLOYEE";
+        String token = createMockJwtToken(u.getEmail(), role);
+        return ResponseEntity.ok(Map.of(
+            "token", token,
+            "email", u.getEmail(),
+            "role", role,
+            "roles", List.of(role),
+            "username", u.getUsername(),
+            "firstName", u.getFirstName() == null ? "" : u.getFirstName(),
+            "lastName", u.getLastName() == null ? "" : u.getLastName()
         ));
     }
 
